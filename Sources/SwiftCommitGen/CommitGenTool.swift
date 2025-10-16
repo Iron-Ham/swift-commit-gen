@@ -8,6 +8,7 @@ struct CommitGenTool {
   private let llmClient: LLMClient
   private let renderer: Renderer
   private let logger: CommitGenLogger
+  private let consoleTheme: ConsoleTheme
 
   init(
     options: CommitGenOptions,
@@ -25,6 +26,7 @@ struct CommitGenTool {
     self.llmClient = llmClient
     self.renderer = renderer
     self.logger = logger
+    self.consoleTheme = logger.consoleTheme
   }
 
   func run() async throws {
@@ -263,7 +265,17 @@ struct CommitGenTool {
     guard !summary.files.isEmpty else { return }
     logger.info("Reviewing \(summary.fileCount) file(s):")
     for file in summary.files {
-      logger.info("  - \(file.path) (+\(file.additions) / -\(file.deletions)) [\(file.location)]")
+      let bullet = consoleTheme.applying(consoleTheme.muted, to: "  - ")
+      let path = consoleTheme.applying(consoleTheme.path, to: file.path)
+      let stats = [
+        consoleTheme.applying(consoleTheme.muted, to: "("),
+        consoleTheme.applying(consoleTheme.additions, to: "+\(file.additions)"),
+        consoleTheme.applying(consoleTheme.muted, to: " / "),
+        consoleTheme.applying(consoleTheme.deletions, to: "-\(file.deletions)"),
+        consoleTheme.applying(consoleTheme.muted, to: ")")
+      ].joined()
+      let location = consoleTheme.applying(consoleTheme.metadata, to: "[\(file.location)]")
+      logger.info("\(bullet)\(path) \(stats) \(location)")
     }
   }
 
