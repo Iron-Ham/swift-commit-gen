@@ -67,12 +67,22 @@ Phase 6: CLI Experience 🔄
 -------------------------
 1. ✅ Command flow
    - ✅ Default invocation runs inspection → summarization → model call → preview.
-   - ✅ Provide `--staged` to limit to staged changes; `--dry-run` to skip `git commit`.
+   - ✅ Provide `--staged` to limit to staged changes.
+   - 🔜 Reintroduce `--dry-run` to preview prompts without invoking the model or editing flow.
 2. 🔄 Interactive review
    - ✅ Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
    - ✅ On accept, optionally stage files (`--stage`) and run `git commit -F -` using the generated text (`--commit`).
    - ✅ Surface a summary of changes that will be committed alongside the draft.
 3. ✅ Add `--print-json` for tooling integration (via `--format json`).
+
+Phase 5b: Prompt Budget & Batching 🚧
+-----------------------------------
+1. 🔄 Prompt heuristics
+   - ✅ Capture large/binary diff metadata to summarize oversized changes without raw snippets.
+   - 🔄 Tune per-file thresholds and truncation messaging for high-volume repositories.
+2. ⚪ Batching strategy
+   - ⚪ Estimate prompt token budgets and split large change sets into sequential model calls.
+   - ⚪ Preserve context between batches while avoiding context-window overflow.
 
 Phase 7: Configuration & Persistence
 ------------------------------------

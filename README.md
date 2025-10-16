@@ -12,7 +12,7 @@ Features
 
 Project Status
 --------------
-This repository currently contains the project scaffold while the CLI implementation is underway. The README captures the target behavior and development plan so contributors can align on goals early.
+The CLI currently supports end-to-end commit generation, including Git inspection, AI-assisted drafting, interactive editing, and optional auto-staging/committing. Configuration files, advanced batching for huge diffs, and a restored `--dry-run` mode remain on the roadmap.
 
 Prerequisites
 -------------
@@ -20,6 +20,53 @@ Prerequisites
 - Xcode 26 (or newer) with the command line tools installed (`xcode-select --install`)
 - Swift 6 toolchain (ships with Xcode 26)
 - Git 2.40+ available on `PATH`
+- Full Disk Access enabled for the Terminal (or your preferred shell) so the FoundationModels framework can initialize properly
+
+Installation
+------------
+1. Clone the repository:
+	```sh
+	git clone https://github.com/Iron-Ham/swift-commit-gen.git
+	cd swift-commit-gen
+	```
+2. Run the bundled install script (installs into `~/.local/bin` by default):
+	```sh
+	Scripts/install.sh
+	```
+	Pass a custom destination as the first argument to install elsewhere, e.g. `Scripts/install.sh /usr/local/bin`.
+3. (Optional) If you prefer manual installation, build and copy the binary yourself:
+	```sh
+	swift build -c release
+	install -d "$HOME/.local/bin"
+	install .build/release/swiftcommitgen "$HOME/.local/bin/"
+	```
+	Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile if needed.
+
+First-Run Notes
+---------------
+- The first invocation may prompt for Apple Intelligence access; approve the request in System Settings → Privacy & Security → Apple Intelligence.
+- If `swiftcommitgen` reports that the model is unavailable, ensure Apple Intelligence is enabled and the device satisfies the on-device requirements.
+
+Usage
+-----
+From the root of a Git repository with pending changes:
+
+```sh
+swift run swiftcommitgen generate
+```
+
+Or, after installation:
+
+```sh
+swiftcommitgen generate
+```
+
+Key options:
+- `--staged`: limit analysis to staged changes only.
+- `--format json`: emit the generated draft as JSON (skips interactive review).
+- `--commit`: automatically run `git commit` after you accept the draft (combine with `--stage` to add unstaged files first).
+
+Pass `--help` to list all available flags.
 
 Planned Workflow
 ----------------
@@ -33,8 +80,9 @@ The CLI will perform the following steps when invoked:
 
 Roadmap
 -------
-- [ ] Implement Git status inspection and change summarization utilities
-- [ ] Integrate with Apple's Intelligence framework for local inference
-- [ ] Provide interactive terminal UI for accepting/editing generated messages
+- [x] Implement Git status inspection and change summarization utilities
+- [x] Integrate with Apple's Intelligence framework for local inference
+- [x] Provide interactive terminal UI for accepting/editing generated messages
 - [ ] Add configuration options (prompt templates, verbosity, output format)
 - [ ] Document testing strategy and add automated tests
+- [ ] Reintroduce `--dry-run` and add prompt batching for massive diffs
