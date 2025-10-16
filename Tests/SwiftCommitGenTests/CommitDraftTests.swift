@@ -33,7 +33,8 @@ struct CommitDraftTests {
 
   @Test("Normalizes labeled subject and redundant body")
   func normalizesLabeledSubject() {
-    let response = "Subject: Fix parser bug\n\nSubject: Fix parser bug\n\nProvide additional details.\n"
+    let response =
+      "Subject: Fix parser bug\n\nSubject: Fix parser bug\n\nProvide additional details.\n"
     let draft = CommitDraft(responseText: response)
 
     #expect(draft.subject == "Fix parser bug")
@@ -51,7 +52,8 @@ struct CommitDraftTests {
 
   @Test("Parses JSON response with optional description")
   func parsesJSONResponse() {
-    let response = #"{ "title": "Add retry handler", "description": "Introduce bounded retries for the model client." }"#
+    let response =
+      #"{ "title": "Add retry handler", "description": "Introduce bounded retries for the model client." }"#
     let draft = CommitDraft(responseText: response)
 
     #expect(draft.subject == "Add retry handler")

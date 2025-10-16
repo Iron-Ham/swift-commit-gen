@@ -25,7 +25,8 @@ extension CommitGenError: LocalizedError {
       }
       return "Apple's on-device language model is unavailable: \(reason)."
     case .modelTimedOut(let timeout):
-      return "The on-device language model did not respond within \(formatSeconds(timeout)). Try again shortly or reduce the diff size."
+      return
+        "The on-device language model did not respond within \(formatSeconds(timeout)). Try again shortly or reduce the diff size."
     case .modelGenerationFailed(let message):
       return message
     case .notImplemented:

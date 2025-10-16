@@ -27,7 +27,8 @@ struct CommitDraft {
 
       if let description = payload.description {
         let normalizedDescription = description.replacingOccurrences(of: "\r\n", with: "\n")
-        let components = normalizedDescription.split(separator: "\n", omittingEmptySubsequences: false)
+        let components = normalizedDescription.split(
+          separator: "\n", omittingEmptySubsequences: false)
         body = CommitDraft.sanitizeBody(Array(components), subject: subjectCandidate)
       } else {
         body = ""
@@ -65,7 +66,7 @@ struct CommitDraft {
     "subject:",
     "title:",
     "commit message:",
-    "commit:"
+    "commit:",
   ]
 
   private struct DraftPayload: Decodable {
@@ -77,11 +78,9 @@ struct CommitDraft {
     let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
     let lowercased = trimmed.lowercased()
 
-    for prefix in labelPrefixes {
-      if lowercased.hasPrefix(prefix) {
-        let startIndex = trimmed.index(trimmed.startIndex, offsetBy: prefix.count)
-        return trimmed[startIndex...].trimmingCharacters(in: .whitespacesAndNewlines)
-      }
+    for prefix in labelPrefixes where lowercased.hasPrefix(prefix) {
+      let startIndex = trimmed.index(trimmed.startIndex, offsetBy: prefix.count)
+      return trimmed[startIndex...].trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     return trimmed
@@ -198,10 +197,9 @@ struct CommitDraft {
       return ""
     }
 
-    for suffix in [".", "!", "?"] {
-      if (subject + suffix).caseInsensitiveCompare(body) == .orderedSame {
-        return ""
-      }
+    for suffix in [".", "!", "?"]
+    where (subject + suffix).caseInsensitiveCompare(body) == .orderedSame {
+      return ""
     }
 
     return body

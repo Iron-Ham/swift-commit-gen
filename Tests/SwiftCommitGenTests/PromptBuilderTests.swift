@@ -36,9 +36,9 @@ struct PromptBuilderTests {
     let builder = DefaultPromptBuilder(maxFiles: 5, maxSnippetLines: 3)
     let package = builder.makePrompt(summary: summary, metadata: metadata)
 
-  #expect(package.systemPrompt.contains("You're an AI assistant"))
-  #expect(package.systemPrompt.contains("\"title\""))
-  #expect(package.systemPrompt.contains("Conventional Commits"))
+    #expect(package.systemPrompt.contains("You're an AI assistant"))
+    #expect(package.systemPrompt.contains("\"title\""))
+    #expect(package.systemPrompt.contains("Conventional Commits"))
     #expect(package.systemPrompt.contains("type: subject"))
     #expect(package.userPrompt.contains("SwiftCommitGen"))
     #expect(package.userPrompt.contains("feature/awesome"))
