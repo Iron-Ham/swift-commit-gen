@@ -131,7 +131,7 @@ struct SystemGitClient: GitClient {
   }
 
   func repositoryRoot() async throws -> URL {
-  let output = try runGit(["rev-parse", "--show-toplevel"])
+    let output = try runGit(["rev-parse", "--show-toplevel"])
     let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
       throw CommitGenError.gitRepositoryUnavailable
@@ -141,18 +141,18 @@ struct SystemGitClient: GitClient {
 
   func status() async throws -> GitStatus {
     _ = try await repositoryRoot()
-  let output = try runGit(["status", "--porcelain"])
+    let output = try runGit(["status", "--porcelain"])
     return GitStatusParser.parse(output)
   }
 
   func diffStaged() async throws -> String {
     _ = try await repositoryRoot()
-  return try runGit(["diff", "--cached", "--no-color"])
+    return try runGit(["diff", "--cached", "--no-color"])
   }
 
   func diffUnstaged() async throws -> String {
     _ = try await repositoryRoot()
-  return try runGit(["diff", "--no-color"])
+    return try runGit(["diff", "--no-color"])
   }
 
   func listChangedFiles(scope: GitChangeScope) async throws -> [GitFileChange] {

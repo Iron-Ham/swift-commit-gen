@@ -1,5 +1,5 @@
 protocol PromptBuilder {
-  func makePrompt(from summary: DiffSummary) -> PromptPackage
+  func makePrompt(from summary: ChangeSummary) -> PromptPackage
 }
 
 struct PromptPackage {
@@ -13,11 +13,11 @@ struct PromptPackage {
 }
 
 struct DefaultPromptBuilder: PromptBuilder {
-  func makePrompt(from summary: DiffSummary) -> PromptPackage {
+  func makePrompt(from summary: ChangeSummary) -> PromptPackage {
     // Phase 4 will assemble meaningful prompts.
     return PromptPackage(
       systemPrompt: "You are an expert release engineer.",
-      userPrompt: "Summaries are not yet available."
+      userPrompt: "Summaries are not yet available (\(summary.fileCount) file(s))."
     )
   }
 }

@@ -8,17 +8,17 @@ struct CommitGenTool {
   private let logger: CommitGenLogger
 
   init(
-    options: CommitGenOptions,
-    gitClient: GitClient = SystemGitClient(),
-    summarizer: DiffSummarizer = DefaultDiffSummarizer(),
+  options: CommitGenOptions,
+  gitClient: GitClient = SystemGitClient(),
+  summarizer: DiffSummarizer? = nil,
     promptBuilder: PromptBuilder = DefaultPromptBuilder(),
     llmClient: LLMClient = FoundationModelsClient(),
     renderer: Renderer = ConsoleRenderer(),
     logger: CommitGenLogger = CommitGenLogger()
   ) {
-    self.options = options
-    self.gitClient = gitClient
-    self.summarizer = summarizer
+  self.options = options
+  self.gitClient = gitClient
+  self.summarizer = summarizer ?? DefaultDiffSummarizer(gitClient: gitClient)
     self.promptBuilder = promptBuilder
     self.llmClient = llmClient
     self.renderer = renderer
@@ -39,16 +39,16 @@ struct CommitGenTool {
 
     logger.info("Detected \(changes.count) pending change(s) in \(describe(scope: scope)) scope.")
 
+    let summary = try await summarizer.summarize(status: status, includeStagedOnly: options.includeStagedOnly)
+    logger.info("Summary: \(summary.fileCount) file(s), +\(summary.totalAdditions) / -\(summary.totalDeletions)")
+
     if options.dryRun {
-      logger.info("Listing files:")
-      for change in changes {
-        logger.info("  \(change.summary)")
-      }
+      renderDryRun(summary)
       logger.warning("Dry run complete. Commit message generation arrives in a later phase.")
       return
     }
 
-    logger.warning("Git inspection succeeded. Commit generation is not yet implemented.")
+    logger.warning("Diff summarization complete. Commit generation is not yet implemented.")
   }
 
   private func describe(scope: GitChangeScope) -> String {
@@ -59,6 +59,16 @@ struct CommitGenTool {
       return "unstaged"
     case .all:
       return "staged + unstaged"
+    }
+  }
+
+  private func renderDryRun(_ summary: ChangeSummary) {
+    logger.info("Detailed change summary:")
+    for file in summary.files {
+      logger.info("  - \(file.label): \(file.path) (+\(file.additions) / -\(file.deletions))")
+      for line in file.snippet.prefix(6) {
+        logger.info("     \(line)")
+      }
     }
   }
 }
