@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftCommitGen}",
+            "name": "Debug SwiftCommitGen",
+            "program": "${workspaceFolder:SwiftCommitGen}/.build/debug/SwiftCommitGen",
+            "preLaunchTask": "swift: Build Debug SwiftCommitGen"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftCommitGen}",
+            "name": "Release SwiftCommitGen",
+            "program": "${workspaceFolder:SwiftCommitGen}/.build/release/SwiftCommitGen",
+            "preLaunchTask": "swift: Build Release SwiftCommitGen"
+        }
+    ]
+}
