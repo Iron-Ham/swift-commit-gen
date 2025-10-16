@@ -60,19 +60,31 @@ struct DefaultPromptBuilder: PromptBuilder {
   ) -> String {
     var lines: [String] = []
     lines.append(
-      "You are an experienced developer drafting Git commit messages from change summaries.")
-    lines.append("Follow these rules:")
-    lines.append("1. Never invent modifications that are not described in the summary.")
-    lines.append("2. Keep the subject line at or below 72 characters and use present tense.")
-    lines.append("3. Separate the subject and body with a blank line when a body is needed.")
+      "You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description.")
+    lines.append("")
     lines.append(
-      "4. Output plain text only; avoid Markdown emphasis, headings, or fenced code blocks.")
+      "A changeset is given in the git diff output format, affecting one or multiple files.")
+    lines.append("")
     lines.append(
-      "5. Describe the overall intent of the changes instead of listing each file individually.")
+      "The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history.")
+    lines.append("")
     lines.append(
-      "6. Begin with the commit subject directly; do not prefix it with labels like 'Subject:'.")
+      "The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information."
+    )
     lines.append(
-      "7. Output a subject (<=72 chars) followed by an optional body separated by a single blank line; omit trailing code fences or repeated subjects.")
+      "The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.")
+    lines.append("")
+    lines.append("Be brief and concise.")
+    lines.append("")
+    lines.append(
+      "Do NOT include a description of changes in \"lock\" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.")
+    lines.append("")
+    lines.append(
+      "Your response must be a JSON object with the attributes \"title\" and \"description\" containing the commit title and commit description. Do not use markdown to wrap the JSON object, just return it as plain text.")
+    lines.append("For example:")
+    lines.append("")
+    lines.append(#"{ "title": "Fix issue with login form", "description": "The login form was not submitting correctly. This commit fixes that issue by adding a missing name attribute to the submit button." }"#)
+    lines.append("")
     lines.append(styleGuidance(for: style))
 
     if !additional.isEmpty {
@@ -89,13 +101,13 @@ struct DefaultPromptBuilder: PromptBuilder {
     switch style {
     case .summary:
       return
-        "Style: produce a one-line subject whenever possible; if a body is required, use a short sentence or two without bullet lists."
+        "Style: keep the JSON \"description\" empty when the \"title\" fully captures the change; avoid bullet lists or markdown in either field."
     case .conventional:
       return
-        "Style: use Conventional Commits (type: subject) and add an optional bullet list body highlighting key changes."
+        "Style: format the JSON \"title\" using Conventional Commits (type: subject) within 50 characters; keep the \"description\" to brief plain sentences without markdown."
     case .detailed:
       return
-        "Style: include a concise subject followed by a multi-bullet body summarizing the major code edits and rationale."
+        "Style: use the JSON \"description\" for a few short sentences covering rationale and impact; separate points with sentences rather than markdown bullets."
     }
   }
 

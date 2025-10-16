@@ -16,6 +16,26 @@ struct CommitDraft {
 
   init(responseText: String) {
     let normalized = responseText.replacingOccurrences(of: "\r\n", with: "\n")
+    if let payload = CommitDraft.decodeJSONPayload(from: normalized) {
+      let rawTitle = payload.title.trimmingCharacters(in: .whitespacesAndNewlines)
+      var subjectCandidate = CommitDraft.stripLabel(from: rawTitle)
+      if subjectCandidate.isEmpty {
+        subjectCandidate = rawTitle
+      }
+
+      subject = subjectCandidate
+
+      if let description = payload.description {
+        let normalizedDescription = description.replacingOccurrences(of: "\r\n", with: "\n")
+        let components = normalizedDescription.split(separator: "\n", omittingEmptySubsequences: false)
+        body = CommitDraft.sanitizeBody(Array(components), subject: subjectCandidate)
+      } else {
+        body = ""
+      }
+
+      return
+    }
+
     let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false)
 
     guard let firstLine = lines.first else {
@@ -48,6 +68,11 @@ struct CommitDraft {
     "commit:"
   ]
 
+  private struct DraftPayload: Decodable {
+    var title: String
+    var description: String?
+  }
+
   private static func stripLabel(from line: String) -> String {
     let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
     let lowercased = trimmed.lowercased()
@@ -60,6 +85,50 @@ struct CommitDraft {
     }
 
     return trimmed
+  }
+
+  private static func decodeJSONPayload(from text: String) -> DraftPayload? {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    let unfenced = stripCodeFences(from: trimmed)
+
+    if let payload = decode(unfenced) {
+      return payload
+    }
+
+    if let start = unfenced.firstIndex(of: "{"), let end = unfenced.lastIndex(of: "}") {
+      let json = unfenced[start...end]
+      return decode(String(json))
+    }
+
+    return nil
+  }
+
+  private static func decode(_ json: String) -> DraftPayload? {
+    guard let data = json.data(using: .utf8) else { return nil }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .useDefaultKeys
+    return try? decoder.decode(DraftPayload.self, from: data)
+  }
+
+  private static func stripCodeFences(from text: String) -> String {
+    var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+
+    func isFence(_ line: Substring) -> Bool {
+      let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+      return trimmed.hasPrefix("```")
+    }
+
+    if let first = lines.first, isFence(first) {
+      lines.removeFirst()
+    }
+    if let last = lines.last, isFence(last) {
+      lines.removeLast()
+    }
+
+    return lines.map(String.init).joined(separator: "\n")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   private static func sanitizeBody(_ bodyLines: [Substring], subject: String) -> String {

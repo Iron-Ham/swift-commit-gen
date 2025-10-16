@@ -48,4 +48,22 @@ struct CommitDraftTests {
     #expect(draft.subject == "Update docs")
     #expect(draft.body == "Refresh README examples.")
   }
+
+  @Test("Parses JSON response with optional description")
+  func parsesJSONResponse() {
+    let response = #"{ "title": "Add retry handler", "description": "Introduce bounded retries for the model client." }"#
+    let draft = CommitDraft(responseText: response)
+
+    #expect(draft.subject == "Add retry handler")
+    #expect(draft.body == "Introduce bounded retries for the model client.")
+  }
+
+  @Test("Handles JSON response without description")
+  func handlesJSONWithoutDescription() {
+    let response = #"{ "title": "Refactor prompt builder", "description": "" }"#
+    let draft = CommitDraft(responseText: response)
+
+    #expect(draft.subject == "Refactor prompt builder")
+    #expect(draft.body.isEmpty)
+  }
 }
