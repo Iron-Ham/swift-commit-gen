@@ -1,7 +1,6 @@
 import ArgumentParser
 
 struct GenerateCommand: AsyncParsableCommand {
-
   static let configuration = CommandConfiguration(
     commandName: "generate",
     abstract: "Inspect the current Git repository and draft a commit message."

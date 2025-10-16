@@ -1,15 +1,18 @@
 import Testing
+
 @testable import SwiftCommitGen
 
 struct CommitDraftTests {
-
   @Test("Parses subject and body from multi-line response")
   func parsesSubjectAndBody() {
-    let response = "feat: add parser support\n\n- update diff parser to track renames\n- add coverage for Availability handling\n"
+    let response =
+      "feat: add parser support\n\n- update diff parser to track renames\n- add coverage for Availability handling\n"
     let draft = CommitDraft(responseText: response)
 
     #expect(draft.subject == "feat: add parser support")
-    #expect(draft.body == "- update diff parser to track renames\n- add coverage for Availability handling")
+    #expect(
+      draft.body
+        == "- update diff parser to track renames\n- add coverage for Availability handling")
   }
 
   @Test("Handles single-line response")

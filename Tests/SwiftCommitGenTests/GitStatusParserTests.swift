@@ -1,16 +1,16 @@
 import Testing
+
 @testable import SwiftCommitGen
 
 struct GitStatusParserTests {
-
   @Test("Parses basic porcelain output")
   func parsesBasicPorcelainOutput() {
     let sample = """
-    M  Sources/App/File.swift
-    AM Sources/App/NewFile.swift
-    ?? README.md
-    R  OldName.swift -> NewName.swift
-    """
+      M  Sources/App/File.swift
+      AM Sources/App/NewFile.swift
+      ?? README.md
+      R  OldName.swift -> NewName.swift
+      """
 
     let status = GitStatusParser.parse(sample)
 

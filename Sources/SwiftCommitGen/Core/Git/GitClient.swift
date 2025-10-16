@@ -21,7 +21,7 @@ enum GitChangeKind: String {
   case typeChange = "T"
   case unmerged = "U"
   case untracked = "?"
-  case unknown = "-" // default fallback
+  case unknown = "-"  // default fallback
 
   var description: String {
     switch self {
@@ -184,7 +184,8 @@ struct SystemGitClient: GitClient {
       formatted.append("\n")
     }
 
-    let tempURL = fileManager.temporaryDirectory.appendingPathComponent("swiftcommitgen-\(UUID().uuidString).txt")
+    let tempURL = fileManager.temporaryDirectory.appendingPathComponent(
+      "swiftcommitgen-\(UUID().uuidString).txt")
     defer { try? fileManager.removeItem(at: tempURL) }
 
     try formatted.write(to: tempURL, atomically: true, encoding: .utf8)

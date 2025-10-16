@@ -57,8 +57,10 @@ struct DefaultDiffSummarizer: DiffSummarizer {
   func summarize(status: GitStatus, includeStagedOnly: Bool) async throws -> ChangeSummary {
     var summaries: [ChangeSummary.FileSummary] = []
 
-  let stagedDiff = status.staged.isEmpty ? [:] : parseDiff(try await gitClient.diffStaged())
-  let unstagedDiff = includeStagedOnly || status.unstaged.isEmpty ? [:] : parseDiff(try await gitClient.diffUnstaged())
+    let stagedDiff = status.staged.isEmpty ? [:] : parseDiff(try await gitClient.diffStaged())
+    let unstagedDiff =
+      includeStagedOnly || status.unstaged.isEmpty
+      ? [:] : parseDiff(try await gitClient.diffUnstaged())
 
     let scopedChanges: [GitFileChange]
     if includeStagedOnly {
@@ -78,8 +80,8 @@ struct DefaultDiffSummarizer: DiffSummarizer {
         diffInfo = nil
       }
 
-  let additions = diffInfo?.additions ?? 0
-  let deletions = diffInfo?.deletions ?? 0
+      let additions = diffInfo?.additions ?? 0
+      let deletions = diffInfo?.deletions ?? 0
       let snippet = diffInfo?.snippet ?? defaultSnippet(for: change)
 
       let summary = ChangeSummary.FileSummary(
@@ -130,7 +132,8 @@ struct DefaultDiffSummarizer: DiffSummarizer {
     var currentNewPath: String?
 
     func finalizeBlock() {
-      guard let targetPath = determineTargetPath(newPath: currentNewPath, oldPath: currentOldPath) else {
+      guard let targetPath = determineTargetPath(newPath: currentNewPath, oldPath: currentOldPath)
+      else {
         currentLines.removeAll(keepingCapacity: true)
         currentOldPath = nil
         currentNewPath = nil

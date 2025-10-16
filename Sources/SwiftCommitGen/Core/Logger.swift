@@ -1,7 +1,6 @@
 import Foundation
 
 struct CommitGenLogger {
-
   enum Level: String {
     case info
     case warning

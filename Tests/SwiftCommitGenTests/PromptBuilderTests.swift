@@ -1,8 +1,8 @@
 import Testing
+
 @testable import SwiftCommitGen
 
 struct PromptBuilderTests {
-
   @Test("Builds prompts with repository metadata and style guidance")
   func buildsPrompt() {
     let summary = ChangeSummary(files: [
@@ -23,7 +23,7 @@ struct PromptBuilderTests {
         additions: 1,
         deletions: 1,
         snippet: ["@@ renamed docs"]
-      )
+      ),
     ])
 
     let metadata = PromptMetadata(

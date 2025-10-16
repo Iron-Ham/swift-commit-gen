@@ -49,14 +49,18 @@ struct DefaultPromptBuilder: PromptBuilder {
 
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage {
     let trimmedSummary = ChangeSummary(files: Array(summary.files.prefix(maxFiles)))
-    let system = buildSystemPrompt(style: metadata.style, additional: metadata.additionalInstructions)
+    let system = buildSystemPrompt(
+      style: metadata.style, additional: metadata.additionalInstructions)
     let user = buildUserPrompt(summary: trimmedSummary, metadata: metadata)
     return PromptPackage(systemPrompt: system, userPrompt: user)
   }
 
-  private func buildSystemPrompt(style: CommitGenOptions.PromptStyle, additional: [String]) -> String {
+  private func buildSystemPrompt(
+    style: CommitGenOptions.PromptStyle, additional: [String]
+  ) -> String {
     var lines: [String] = []
-    lines.append("You are an experienced developer drafting Git commit messages from change summaries.")
+    lines.append(
+      "You are an experienced developer drafting Git commit messages from change summaries.")
     lines.append("Follow these rules:")
     lines.append("1. Never invent modifications that are not described in the summary.")
     lines.append("2. Keep the subject line at or below 72 characters and use present tense.")
@@ -76,11 +80,14 @@ struct DefaultPromptBuilder: PromptBuilder {
   private func styleGuidance(for style: CommitGenOptions.PromptStyle) -> String {
     switch style {
     case .summary:
-      return "Style: produce a one-line subject and only include a short body paragraph if absolutely necessary."
+      return
+        "Style: produce a one-line subject and only include a short body paragraph if absolutely necessary."
     case .conventional:
-      return "Style: use Conventional Commits (type: subject) and add an optional bullet list body highlighting key changes."
+      return
+        "Style: use Conventional Commits (type: subject) and add an optional bullet list body highlighting key changes."
     case .detailed:
-      return "Style: include a concise subject followed by a multi-bullet body summarizing the major code edits and rationale."
+      return
+        "Style: include a concise subject followed by a multi-bullet body summarizing the major code edits and rationale."
     }
   }
 
@@ -89,7 +96,8 @@ struct DefaultPromptBuilder: PromptBuilder {
     lines.append("Repository: \(metadata.repositoryName)")
     lines.append("Branch: \(metadata.branchName)")
     lines.append("Scope: \(metadata.scopeDescription)")
-    lines.append("Totals: \(summary.fileCount) files, +\(summary.totalAdditions), -\(summary.totalDeletions)")
+    lines.append(
+      "Totals: \(summary.fileCount) files, +\(summary.totalAdditions), -\(summary.totalDeletions)")
     lines.append("")
     lines.append("Changes:")
 
@@ -112,7 +120,8 @@ struct DefaultPromptBuilder: PromptBuilder {
       identifier = "\(old) -> \(file.path)"
     }
 
-    let header = "- \(identifier) [\(file.kind.description); \(scopeLabel(for: file.location)); +\(file.additions)/-\(file.deletions)]"
+    let header =
+      "- \(identifier) [\(file.kind.description); \(scopeLabel(for: file.location)); +\(file.additions)/-\(file.deletions)]"
     output.append(header)
 
     let snippetLines = file.snippet.prefix(maxSnippetLines)

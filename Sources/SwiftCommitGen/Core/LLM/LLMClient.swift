@@ -49,11 +49,13 @@ struct CommitDraft {
 struct FoundationModelsClient: LLMClient {
   private let generationOptions: GenerationOptions
 
-  init(generationOptions: GenerationOptions = GenerationOptions(
-    sampling: nil,
-    temperature: 0.3,
-    maximumResponseTokens: 512
-  )) {
+  init(
+    generationOptions: GenerationOptions = GenerationOptions(
+      sampling: nil,
+      temperature: 0.3,
+      maximumResponseTokens: 512
+    )
+  ) {
     self.generationOptions = generationOptions
   }
 

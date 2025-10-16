@@ -41,8 +41,11 @@ struct CommitGenTool {
 
     logger.info("Detected \(changes.count) pending change(s) in \(describe(scope: scope)) scope.")
 
-    let summary = try await summarizer.summarize(status: status, includeStagedOnly: options.includeStagedOnly)
-    logger.info("Summary: \(summary.fileCount) file(s), +\(summary.totalAdditions) / -\(summary.totalDeletions)")
+    let summary = try await summarizer.summarize(
+      status: status, includeStagedOnly: options.includeStagedOnly)
+    logger.info(
+      "Summary: \(summary.fileCount) file(s), +\(summary.totalAdditions) / -\(summary.totalDeletions)"
+    )
 
     let branchName = (try? await gitClient.currentBranch()) ?? "HEAD"
     let repoName = repositoryName(from: repoRoot)
@@ -74,7 +77,9 @@ struct CommitGenTool {
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
-      logger.warning("Automated commit application is not implemented yet; integrate the JSON payload into your workflow manually.")
+      logger.warning(
+        "Automated commit application is not implemented yet; integrate the JSON payload into your workflow manually."
+      )
       return
     }
 
@@ -97,7 +102,9 @@ struct CommitGenTool {
     }
   }
 
-  private func renderDryRun(_ summary: ChangeSummary, prompt: PromptPackage, metadata: PromptMetadata) {
+  private func renderDryRun(
+    _ summary: ChangeSummary, prompt: PromptPackage, metadata: PromptMetadata
+  ) {
     logger.info("Prompt style: \(metadata.style.rawValue)")
     logger.info("Detailed change summary:")
     for file in summary.files {
@@ -172,7 +179,8 @@ struct CommitGenTool {
       return nil
     }
 
-    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("swiftcommitgen-\(UUID().uuidString).txt")
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "swiftcommitgen-\(UUID().uuidString).txt")
     defer { try? FileManager.default.removeItem(at: tempURL) }
 
     var contents = draft.subject
@@ -185,7 +193,7 @@ struct CommitGenTool {
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/bin/sh")
-    process.arguments = ["-c", "\(editor) \(tempURL.path)" ]
+    process.arguments = ["-c", "\(editor) \(tempURL.path)"]
     process.standardInput = FileHandle.standardInput
     process.standardOutput = FileHandle.standardOutput
     process.standardError = FileHandle.standardError
@@ -200,7 +208,8 @@ struct CommitGenTool {
 
     process.waitUntilExit()
     guard process.terminationStatus == 0 else {
-      logger.warning("Editor exited with status \(process.terminationStatus); keeping previous draft.")
+      logger.warning(
+        "Editor exited with status \(process.terminationStatus); keeping previous draft.")
       return nil
     }
 
@@ -215,11 +224,15 @@ struct CommitGenTool {
     return updatedDraft
   }
 
-  private func handleAcceptedDraft(_ draft: CommitDraft, summary: ChangeSummary, status: GitStatus) async throws {
+  private func handleAcceptedDraft(
+    _ draft: CommitDraft, summary: ChangeSummary, status: GitStatus
+  ) async throws {
     logger.info("Commit draft accepted.")
 
     guard options.autoCommit else {
-      logger.warning("Automated git commit remains optional. Run `git commit` manually using the accepted draft when ready.")
+      logger.warning(
+        "Automated git commit remains optional. Run `git commit` manually using the accepted draft when ready."
+      )
       return
     }
 
@@ -227,7 +240,9 @@ struct CommitGenTool {
       let hasPending = !status.unstaged.isEmpty || !status.untracked.isEmpty
       if hasPending {
         guard options.stageChanges else {
-          logger.warning("Unstaged changes detected; re-run with --stage to stage them automatically. Commit skipped.")
+          logger.warning(
+            "Unstaged changes detected; re-run with --stage to stage them automatically. Commit skipped."
+          )
           return
         }
 

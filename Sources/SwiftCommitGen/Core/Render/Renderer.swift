@@ -16,10 +16,11 @@ struct ConsoleRenderer: Renderer {
     case .json:
       let payload: [String: String] = [
         "subject": draft.subject,
-        "body": draft.body
+        "body": draft.body,
       ]
       if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
-         let output = String(data: data, encoding: .utf8) {
+        let output = String(data: data, encoding: .utf8)
+      {
         print(output)
       }
     }
