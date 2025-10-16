@@ -68,16 +68,6 @@ Key options:
 
 Pass `--help` to list all available flags.
 
-Planned Workflow
-----------------
-The CLI will perform the following steps when invoked:
-1. Verify the current working directory is part of a Git repository.
-2. Abort if the worktree is clean, otherwise gather staged and unstaged diffs.
-3. Generate a structured summary of the changes (file list, diff highlights).
-4. Prompt Apple's onboard LLM via the Swift Intelligence framework with the summary and project metadata.
-5. Present the AI-generated commit title and body for confirmation or manual edits.
-6. Optionally write the commit (`git commit`) when approved.
-
 Roadmap
 -------
 - [x] Implement Git status inspection and change summarization utilities
