@@ -8,6 +8,9 @@ let package = Package(
   platforms: [
     .macOS(.v26)
   ],
+  products: [
+    .executable(name: "swiftcommitgen", targets: ["SwiftCommitGen"])
+  ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
     .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
