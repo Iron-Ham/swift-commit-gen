@@ -30,4 +30,22 @@ struct CommitDraftTests {
     let draft = CommitDraft(subject: "feat: add api", body: "- update api\n- add docs")
     #expect(draft.commitMessage == "feat: add api\n\n- update api\n- add docs")
   }
+
+  @Test("Normalizes labeled subject and redundant body")
+  func normalizesLabeledSubject() {
+    let response = "Subject: Fix parser bug\n\nSubject: Fix parser bug\n\nProvide additional details.\n"
+    let draft = CommitDraft(responseText: response)
+
+    #expect(draft.subject == "Fix parser bug")
+    #expect(draft.body == "Provide additional details.")
+  }
+
+  @Test("Strips code fences from body")
+  func stripsCodeFencesFromBody() {
+    let response = "Subject: Update docs\n\n```\nRefresh README examples.\n```\n"
+    let draft = CommitDraft(responseText: response)
+
+    #expect(draft.subject == "Update docs")
+    #expect(draft.body == "Refresh README examples.")
+  }
 }

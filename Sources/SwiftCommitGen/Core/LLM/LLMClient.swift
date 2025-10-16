@@ -25,17 +25,13 @@ struct CommitDraft {
     }
 
     let trimmedSubject = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-
-    var bodyLines = Array(lines.dropFirst())
-    while let head = bodyLines.first, head.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      bodyLines.removeFirst()
-    }
-    while let tail = bodyLines.last, tail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      bodyLines.removeLast()
+    var subjectCandidate = CommitDraft.stripLabel(from: trimmedSubject)
+    if subjectCandidate.isEmpty {
+      subjectCandidate = trimmedSubject
     }
 
-    subject = trimmedSubject
-    body = bodyLines.joined(separator: "\n")
+    subject = subjectCandidate
+    body = CommitDraft.sanitizeBody(Array(lines.dropFirst()), subject: subjectCandidate)
   }
 
   var commitMessage: String {
@@ -43,6 +39,103 @@ struct CommitDraft {
       return subject
     }
     return "\(subject)\n\n\(body)"
+  }
+
+  private static let labelPrefixes: [String] = [
+    "subject:",
+    "title:",
+    "commit message:",
+    "commit:"
+  ]
+
+  private static func stripLabel(from line: String) -> String {
+    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+    let lowercased = trimmed.lowercased()
+
+    for prefix in labelPrefixes {
+      if lowercased.hasPrefix(prefix) {
+        let startIndex = trimmed.index(trimmed.startIndex, offsetBy: prefix.count)
+        return trimmed[startIndex...].trimmingCharacters(in: .whitespacesAndNewlines)
+      }
+    }
+
+    return trimmed
+  }
+
+  private static func sanitizeBody(_ bodyLines: [Substring], subject: String) -> String {
+    var lines = bodyLines.map { String($0) }
+
+    func trimmed(_ string: String) -> String {
+      string.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    while let first = lines.first, trimmed(first).isEmpty {
+      lines.removeFirst()
+    }
+    while let last = lines.last, trimmed(last).isEmpty {
+      lines.removeLast()
+    }
+
+    if let first = lines.first, trimmed(first).hasPrefix("```") {
+      lines.removeFirst()
+    }
+    if let last = lines.last, trimmed(last).hasPrefix("```") {
+      lines.removeLast()
+    }
+
+    while let first = lines.first, trimmed(first).isEmpty {
+      lines.removeFirst()
+    }
+    while let last = lines.last, trimmed(last).isEmpty {
+      lines.removeLast()
+    }
+
+    while let first = lines.first {
+      let trimmedFirst = trimmed(first)
+      let strippedFirst = stripLabel(from: trimmedFirst)
+      if trimmedFirst.caseInsensitiveCompare(subject) == .orderedSame
+        || strippedFirst.caseInsensitiveCompare(subject) == .orderedSame
+      {
+        lines.removeFirst()
+        continue
+      }
+      break
+    }
+
+    while let last = lines.last {
+      let trimmedLast = trimmed(last)
+      let strippedLast = stripLabel(from: trimmedLast)
+      if trimmedLast.caseInsensitiveCompare(subject) == .orderedSame
+        || strippedLast.caseInsensitiveCompare(subject) == .orderedSame
+      {
+        lines.removeLast()
+        continue
+      }
+      break
+    }
+
+    let body = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if body.isEmpty {
+      return ""
+    }
+
+    if body.caseInsensitiveCompare(subject) == .orderedSame {
+      return ""
+    }
+
+    let strippedBody = stripLabel(from: body)
+    if strippedBody.caseInsensitiveCompare(subject) == .orderedSame {
+      return ""
+    }
+
+    for suffix in [".", "!", "?"] {
+      if (subject + suffix).caseInsensitiveCompare(body) == .orderedSame {
+        return ""
+      }
+    }
+
+    return body
   }
 }
 

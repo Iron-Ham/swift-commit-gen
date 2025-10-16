@@ -65,6 +65,14 @@ struct DefaultPromptBuilder: PromptBuilder {
     lines.append("1. Never invent modifications that are not described in the summary.")
     lines.append("2. Keep the subject line at or below 72 characters and use present tense.")
     lines.append("3. Separate the subject and body with a blank line when a body is needed.")
+    lines.append(
+      "4. Output plain text only; avoid Markdown emphasis, headings, or fenced code blocks.")
+    lines.append(
+      "5. Describe the overall intent of the changes instead of listing each file individually.")
+    lines.append(
+      "6. Begin with the commit subject directly; do not prefix it with labels like 'Subject:'.")
+    lines.append(
+      "7. Output a subject (<=72 chars) followed by an optional body separated by a single blank line; omit trailing code fences or repeated subjects.")
     lines.append(styleGuidance(for: style))
 
     if !additional.isEmpty {
@@ -81,7 +89,7 @@ struct DefaultPromptBuilder: PromptBuilder {
     switch style {
     case .summary:
       return
-        "Style: produce a one-line subject and only include a short body paragraph if absolutely necessary."
+        "Style: produce a one-line subject whenever possible; if a body is required, use a short sentence or two without bullet lists."
     case .conventional:
       return
         "Style: use Conventional Commits (type: subject) and add an optional bullet list body highlighting key changes."
