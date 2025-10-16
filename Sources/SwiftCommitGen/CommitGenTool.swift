@@ -64,9 +64,9 @@ struct CommitGenTool {
       renderReviewSummary(summary)
     }
 
-    logger.info("Requesting commit draft from the on-device language model…")
-    var draft = try await llmClient.generateCommitDraft(from: promptPackage)
-    renderer.render(draft, format: options.outputFormat)
+  logger.info("Requesting commit draft from the on-device language model…")
+  var draft = try await llmClient.generateCommitDraft(from: promptPackage)
+  renderer.render(draft, format: options.outputFormat)
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
@@ -76,7 +76,14 @@ struct CommitGenTool {
       return
     }
 
-    if let reviewedDraft = try reviewDraft(initialDraft: draft) {
+    if let reviewedDraft = try await reviewDraft(
+      initialDraft: draft,
+      regenerate: { additionalContext in
+        let package = additionalContext.map { promptPackage.appendingUserContext($0) }
+          ?? promptPackage
+        return try await llmClient.generateCommitDraft(from: package)
+      }
+    ) {
       draft = reviewedDraft
       try await handleAcceptedDraft(draft, summary: summary, status: status)
     } else {
@@ -100,12 +107,15 @@ struct CommitGenTool {
     return candidate.isEmpty ? url.path : candidate
   }
 
-  private func reviewDraft(initialDraft: CommitDraft) throws -> CommitDraft? {
+  private func reviewDraft(
+    initialDraft: CommitDraft,
+    regenerate: @escaping (_ additionalContext: String?) async throws -> CommitDraft
+  ) async throws -> CommitDraft? {
     var currentDraft = initialDraft
 
     reviewLoop: while true {
-      logger.info("Options: [y] accept, [e] edit in $EDITOR, [n] abort")
-      guard let response = promptUser("Apply commit draft? [y/e/n]: ") else {
+      logger.info("Options: [y] accept, [e] edit in $EDITOR, [r] regenerate, [c] regenerate with context, [n] abort")
+      guard let response = promptUser("Apply commit draft? [y/e/r/c/n]: ") else {
         continue
       }
 
@@ -117,10 +127,22 @@ struct CommitGenTool {
           currentDraft = updated
           renderer.render(currentDraft, format: .text)
         }
+      case "r", "regen", "regenerate":
+        logger.info("Requesting a new commit draft from the on-device language model…")
+        currentDraft = try await regenerate(nil)
+        renderer.render(currentDraft, format: .text)
+      case "c", "context":
+        guard let additionalContext = promptForAdditionalContext() else {
+          logger.warning("No additional context provided; keeping previous draft.")
+          continue
+        }
+        logger.info("Requesting a new commit draft with user context…")
+        currentDraft = try await regenerate(additionalContext)
+        renderer.render(currentDraft, format: .text)
       case "n", "no", "q", "quit":
         break reviewLoop
       default:
-        logger.warning("Unrecognized option. Please respond with y, e, or n.")
+        logger.warning("Unrecognized option. Please respond with y, e, r, c, or n.")
       }
     }
 
@@ -136,6 +158,22 @@ struct CommitGenTool {
       return nil
     }
     return line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private func promptForAdditionalContext() -> String? {
+    logger.info("Enter additional context for the next draft (blank line to finish, Ctrl+D to cancel):")
+
+    var lines: [String] = []
+    while let line = readLine() {
+      let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmedLine.isEmpty {
+        break
+      }
+      lines.append(line)
+    }
+
+    let combined = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    return combined.isEmpty ? nil : combined
   }
 
   private func editDraft(_ draft: CommitDraft) throws -> CommitDraft? {

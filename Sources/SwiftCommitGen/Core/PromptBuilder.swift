@@ -39,6 +39,20 @@ protocol PromptBuilder {
 struct PromptPackage {
   var systemPrompt: Instructions
   var userPrompt: Prompt
+
+  func appendingUserContext(_ context: String) -> PromptPackage {
+    let trimmed = context.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return self }
+
+    let augmentedUserPrompt = Prompt {
+      userPrompt
+      ""
+      "Additional context from user:"
+      trimmed
+    }
+
+    return PromptPackage(systemPrompt: systemPrompt, userPrompt: augmentedUserPrompt)
+  }
 }
 
 struct DefaultPromptBuilder: PromptBuilder {
@@ -68,30 +82,21 @@ struct DefaultPromptBuilder: PromptBuilder {
 
   private func buildSystemPrompt(style: CommitGenOptions.PromptStyle) -> Instructions {
     Instructions {
-      "You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description."
+      """
+      You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description.
+      A changeset is given in the git diff output format, affecting one or multiple files.
 
-      "A changeset is given in the git diff output format, affecting one or multiple files."
+      The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history.
+      The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information.
+      The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.
 
-      "The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history."
+      Be brief and concise.
+      
+      Do NOT include a description of changes in "lock" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.
 
-      "The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information."
-
-      "The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context."
-
-      "Be brief and concise."
-
-      "Do NOT include a description of changes in \"lock\" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit."
-
-      "When more explanation is helpful, provide a short body with full sentences."
-
-      "Leave the body empty when the subject already captures the change or the context is unclear."
-
-      "For example:"
-      CommitDraft(
-        subject: "Fix issue with login form",
-        body:
-          "The login form was not submitting correctly. This commit fixes that issue by adding a missing name attribute to the submit button."
-      )
+      When more explanation is helpful, provide a short body with full sentences.
+      Leave the body empty when the subject already captures the change or the context is unclear.
+      """
     }
   }
 }
