@@ -8,69 +8,71 @@ Guiding Principles
 - Keep user in control of the final commit message; never auto-commit without confirmation.
 - Structure code for testability (separate git plumbing, diff summarization, model prompting, CLI UX).
 
-Phase 1: Project Foundations
-----------------------------
-1. Update `Package.swift`
-   - Add FoundationModels, Swift Argument Parser, and Swift Collections (for ordered data structures) as dependencies if needed.
-2. Restructure sources
-   - Create modules for `CommitGenTool` (CLI entry point), `GitClient`, `DiffSummarizer`, `PromptBuilder`, `LLMClient`, and `Renderer`.
-   - Provide minimal `main.swift` using ArgumentParser with a `generate` command (default).
-3. Establish logging + error types
-   - Define `CommitGenError` (enum) with cases for I/O, git, model, validation.
-   - Add lightweight logger (stderr output) for debug tracing.
+Phase 1: Project Foundations ✅
+------------------------------
+1. ✅ Update `Package.swift`
+   - ✅ Add FoundationModels, Swift Argument Parser, and Swift Collections (for ordered data structures) as dependencies if needed.
+2. ✅ Restructure sources
+   - ✅ Create modules for `CommitGenTool` (CLI entry point), `GitClient`, `DiffSummarizer`, `PromptBuilder`, `LLMClient`, and `Renderer`.
+   - ✅ Provide minimal `main.swift` using ArgumentParser with a `generate` command (default).
+3. ✅ Establish logging + error types
+   - ✅ Define `CommitGenError` (enum) with cases for I/O, git, model, validation.
+   - ✅ Add lightweight logger (stderr output) for debug tracing.
 
-Phase 2: Git Inspection Layer
------------------------------
-1. Implement `GitClient`
-   - Methods: `repositoryRoot()`, `status()`, `diffStaged()`, `diffUnstaged()`, `listChangedFiles()`.
-   - Execute `git` via `Process`, pipe stdout/stderr, map to Swift structs.
-2. Add validation helpers
-   - Ensure working tree is dirty; otherwise return early (clean state message).
-   - Provide option to limit staged vs unstaged scope.
-3. Unit tests (where feasible)
-   - Use temporary directories with initialized git repos to validate parsing logic.
+Phase 2: Git Inspection Layer ✅
+-------------------------------
+1. ✅ Implement `GitClient`
+   - ✅ Methods: `repositoryRoot()`, `status()`, `diffStaged()`, `diffUnstaged()`, `listChangedFiles()`, `currentBranch()`.
+   - ✅ Execute `git` via `Process`, pipe stdout/stderr, map to Swift structs.
+2. ✅ Add validation helpers
+   - ✅ Ensure working tree is dirty; otherwise return early (clean state message).
+   - ✅ Provide option to limit staged vs unstaged scope.
+3. ✅ Unit tests (where feasible)
+   - ✅ Use temporary directories with initialized git repos to validate parsing logic.
 
-Phase 3: Change Summarization
------------------------------
-1. Design `ChangeSummary` model
-   - File metadata (path, status), diff chunk previews, language hints.
-2. Implement `DiffSummarizer`
-   - Parse unified diff output; trim context to configurable max lines.
-   - Detect rename/add/delete markers.
-3. Add heuristics
-   - Collapse large diffs with placeholders like `<<skipped N lines>>`.
-   - Identify tests vs source changes to inform prompting.
+Phase 3: Change Summarization ✅
+-------------------------------
+1. ✅ Design `ChangeSummary` model
+   - ✅ File metadata (path, status), diff chunk previews, language hints.
+2. ✅ Implement `DiffSummarizer`
+   - ✅ Parse unified diff output; trim context to configurable max lines.
+   - ✅ Detect rename/add/delete markers.
+3. ✅ Add heuristics
+   - ✅ Collapse large diffs with placeholders like `<<skipped N lines>>`.
+   - ✅ Identify tests vs source changes to inform prompting.
 
-Phase 4: Prompt Construction
-----------------------------
-1. Build `PromptBuilder`
-   - Compose system + user messages for Apple model (JSON or plain text; TBD after API exploration).
-   - Include repo name, branch, optional Conventional Commit preference.
-2. Support different styles
-   - Provide flags for `--style conventional|summary|detailed`.
-   - Allow user-provided prompt snippets via config file.
+Phase 4: Prompt Construction ✅
+------------------------------
+1. ✅ Build `PromptBuilder`
+   - ✅ Compose system + user messages for Apple model (plain text for now).
+   - ✅ Include repo name, branch, optional Conventional Commit preference.
+2. ✅ Support different styles
+   - ✅ Provide flags for `--style conventional|summary|detailed`.
+   - ⚪ Allow user-provided prompt snippets via config file (deferred to Phase 7).
 
-Phase 5: FoundationModels Integration
--------------------------------------
-1. Explore API
-   - Investigate `TextGeneration` APIs (likely `TextGenerationSession` or `FMText` equivalents) for on-device inference.
-   - Prototype prompt invocation in isolation with static text to confirm output handling.
-2. Implement `LLMClient`
-   - Initialize model session with temperature, max tokens, stop sequences tuned for commit messages.
-   - Provide async `generateCommitMessage(summary: PromptContext) -> CommitDraft`.
-   - Handle retries, timeouts, and fallback messaging.
-3. Prepare graceful degradation
-   - If the model is unavailable or disabled, surface actionable error message.
+Phase 5: FoundationModels Integration 🔄
+---------------------------------------
+1. ✅ Explore API
+   - ✅ Investigate `LanguageModelSession` API for on-device inference.
+   - ✅ Prototype prompt invocation pattern.
+2. 🔄 Implement `LLMClient`
+   - ✅ Initialize model session with temperature / response limits tuned for commit messages.
+   - ✅ Provide async `generateCommitDraft(summary:)` returning `CommitDraft`.
+   - ⚪ Handle retries, timeouts, and richer fallback messaging when generation fails mid-flight.
+3. ✅ Prepare graceful degradation
+   - ✅ Surface actionable error message when the model is unavailable.
+   - ⚪ Consider offline fallback prompt (e.g., reuse previous draft or instruct user) if model stays unavailable.
 
-Phase 6: CLI Experience
------------------------
-1. Command flow
-   - Default invocation runs inspection → summarization → model call → preview.
-   - Provide `--staged` to limit to staged changes; `--dry-run` to skip `git commit`.
-2. Interactive review
-   - Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
-   - On accept, stage (if opted) and run `git commit -F -` using generated text.
-3. Add `--print-json` for tooling integration.
+Phase 6: CLI Experience 🔄
+-------------------------
+1. ✅ Command flow
+   - ✅ Default invocation runs inspection → summarization → model call → preview.
+   - ✅ Provide `--staged` to limit to staged changes; `--dry-run` to skip `git commit`.
+2. 🔄 Interactive review
+   - ✅ Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
+   - ✅ On accept, optionally stage files (`--stage`) and run `git commit -F -` using the generated text (`--commit`).
+   - ✅ Surface a summary of changes that will be committed alongside the draft.
+3. ✅ Add `--print-json` for tooling integration (via `--format json`).
 
 Phase 7: Configuration & Persistence
 ------------------------------------
@@ -83,6 +85,7 @@ Phase 8: Testing & Tooling
 1. Write unit/integration tests
    - Mock `git` commands and model responses.
    - Use dependency injection for `ProcessRunner` and `LLMClient`.
+   - Add targeted tests for `FoundationModelsClient` once a mockable session abstraction is in place.
 2. Add sample fixtures for diff parsing and prompt generation.
 3. Create `swift test` workflow and document manual verification steps.
 

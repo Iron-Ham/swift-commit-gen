@@ -116,4 +116,12 @@ private struct MockGitClient: GitClient {
   func listChangedFiles(scope: GitChangeScope) async throws -> [GitFileChange] {
     status.changes(for: scope)
   }
+
+  func currentBranch() async throws -> String {
+    "main"
+  }
+
+  func stage(paths: [String]) async throws {}
+
+  func commit(message: String) async throws {}
 }

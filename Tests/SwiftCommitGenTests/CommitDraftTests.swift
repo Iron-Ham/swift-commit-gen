@@ -1,0 +1,30 @@
+import Testing
+@testable import SwiftCommitGen
+
+struct CommitDraftTests {
+
+  @Test("Parses subject and body from multi-line response")
+  func parsesSubjectAndBody() {
+    let response = "feat: add parser support\n\n- update diff parser to track renames\n- add coverage for Availability handling\n"
+    let draft = CommitDraft(responseText: response)
+
+    #expect(draft.subject == "feat: add parser support")
+    #expect(draft.body == "- update diff parser to track renames\n- add coverage for Availability handling")
+  }
+
+  @Test("Handles single-line response")
+  func handlesSingleLineResponse() {
+    let response = "refactor: simplify git client"
+    let draft = CommitDraft(responseText: response)
+
+    #expect(draft.subject == "refactor: simplify git client")
+    #expect(draft.body.isEmpty)
+    #expect(draft.commitMessage == "refactor: simplify git client")
+  }
+
+  @Test("Formats full commit message")
+  func formatsCommitMessage() {
+    let draft = CommitDraft(subject: "feat: add api", body: "- update api\n- add docs")
+    #expect(draft.commitMessage == "feat: add api\n\n- update api\n- add docs")
+  }
+}

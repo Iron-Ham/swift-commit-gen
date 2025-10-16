@@ -4,7 +4,7 @@ enum CommitGenError: Error {
   case gitRepositoryUnavailable
   case gitCommandFailed(message: String)
   case cleanWorkingTree
-  case modelUnavailable
+  case modelUnavailable(reason: String)
   case notImplemented
 }
 
@@ -17,8 +17,11 @@ extension CommitGenError: LocalizedError {
       return message.isEmpty ? "Git command failed for an unknown reason." : message
     case .cleanWorkingTree:
       return "No pending changes detected; nothing to summarize."
-    case .modelUnavailable:
-      return "Apple's on-device language model is unavailable on this machine."
+    case .modelUnavailable(let reason):
+      if reason.isEmpty {
+        return "Apple's on-device language model is unavailable on this machine."
+      }
+      return "Apple's on-device language model is unavailable: \(reason)."
     case .notImplemented:
       return "Commit generation is not implemented yet; future phases will add this capability."
     }

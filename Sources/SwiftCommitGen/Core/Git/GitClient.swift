@@ -115,6 +115,9 @@ protocol GitClient {
   func diffStaged() async throws -> String
   func diffUnstaged() async throws -> String
   func listChangedFiles(scope: GitChangeScope) async throws -> [GitFileChange]
+  func currentBranch() async throws -> String
+  func stage(paths: [String]) async throws
+  func commit(message: String) async throws
 }
 
 struct SystemGitClient: GitClient {
@@ -158,6 +161,34 @@ struct SystemGitClient: GitClient {
   func listChangedFiles(scope: GitChangeScope) async throws -> [GitFileChange] {
     let status = try await status()
     return status.changes(for: scope)
+  }
+
+  func currentBranch() async throws -> String {
+    _ = try await repositoryRoot()
+    let output = try runGit(["rev-parse", "--abbrev-ref", "HEAD"])
+    let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "HEAD" : trimmed
+  }
+
+  func stage(paths: [String]) async throws {
+    guard !paths.isEmpty else { return }
+    _ = try await repositoryRoot()
+    _ = try runGit(["add", "--"] + paths)
+  }
+
+  func commit(message: String) async throws {
+    _ = try await repositoryRoot()
+
+    var formatted = message
+    if !formatted.hasSuffix("\n") {
+      formatted.append("\n")
+    }
+
+    let tempURL = fileManager.temporaryDirectory.appendingPathComponent("swiftcommitgen-\(UUID().uuidString).txt")
+    defer { try? fileManager.removeItem(at: tempURL) }
+
+    try formatted.write(to: tempURL, atomically: true, encoding: .utf8)
+    _ = try runGit(["commit", "-F", tempURL.path])
   }
 
   private func runGit(_ arguments: [String]) throws -> String {
