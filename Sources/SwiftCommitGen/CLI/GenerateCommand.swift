@@ -20,9 +20,6 @@ struct GenerateCommand: AsyncParsableCommand {
   @Flag(name: [.customShort("s"), .long], help: "Only consider staged changes.")
   var stagedOnly: Bool = false
 
-  @Flag(name: .shortAndLong, help: "Skip committing; print the generated draft to the console.")
-  var dryRun: Bool = false
-
   @Option(name: .long, help: "Choose the output format.")
   var format: OutputFormat = .text
 
@@ -43,7 +40,6 @@ struct GenerateCommand: AsyncParsableCommand {
 
     let options = CommitGenOptions(
       includeStagedOnly: stagedOnly,
-      dryRun: dryRun,
       outputFormat: outputFormat,
       promptStyle: promptStyle,
       autoCommit: autoCommit,

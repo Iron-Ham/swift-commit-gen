@@ -1,7 +1,8 @@
 import Foundation
+import FoundationModels
 
-struct ChangeSummary {
-  struct FileSummary {
+struct ChangeSummary: Hashable, Codable, PromptRepresentable {
+  struct FileSummary: Hashable, Codable, PromptRepresentable {
     var path: String
     var oldPath: String?
     var kind: GitChangeKind
@@ -9,9 +10,21 @@ struct ChangeSummary {
     var additions: Int
     var deletions: Int
     var snippet: [String]
+    var snippetTruncated: Bool
+    var isBinary: Bool
+    var diffLineCount: Int
+    var diffHasHunks: Bool
 
     var label: String {
       "\(kind.description.capitalized) \(locationLabel)"
+    }
+
+    private var identifier: String {
+      if let old = oldPath, old != path {
+        "\(old) -> \(path)"
+      } else {
+        path
+      }
     }
 
     private var locationLabel: String {
@@ -23,6 +36,82 @@ struct ChangeSummary {
       case .untracked:
         return "(untracked)"
       }
+    }
+
+    var promptRepresentation: Prompt {
+      Prompt {
+        "- \(identifier) [\(kind.description); \(scopeLabel(for: location)); +\(additions)/-\(deletions)]"
+
+        for note in detailNotes {
+          "  note: \(note)"
+        }
+
+        if shouldRenderSnippet {
+          for line in snippet {
+            "  \(line)"
+          }
+        } else if !hasExplicitNote {
+          "  note: diff omitted (summarize intent in subject/body)."
+        }
+      }
+    }
+
+    private static let largeChangeThreshold = 400
+    private static let largeDiffLineThreshold = 200
+
+    private var diffIsLarge: Bool {
+      additions + deletions >= Self.largeChangeThreshold || diffLineCount >= Self.largeDiffLineThreshold
+    }
+
+    private var shouldRenderSnippet: Bool {
+      guard !isBinary else { return false }
+      guard !diffIsLarge else { return false }
+      guard !snippet.isEmpty else { return false }
+      return true
+    }
+
+    private var hasExplicitNote: Bool {
+      !detailNotes.isEmpty
+    }
+
+    private var detailNotes: [String] {
+      var notes: [String] = []
+
+      if kind == .added {
+        notes.append("new file")
+      }
+
+      if kind == .deleted {
+        notes.append("entire file removed")
+      }
+
+      if kind == .renamed, let old = oldPath {
+        if diffHasHunks {
+          notes.append("renamed from \(old)")
+        } else {
+          notes.append("pure rename from \(old)")
+        }
+      }
+
+      if kind == .copied, let old = oldPath {
+        notes.append("copied from \(old)")
+      }
+
+      if isBinary {
+        notes.append("binary file; diff omitted")
+      }
+
+      if diffIsLarge {
+        notes.append("large diff (+\(additions)/-\(deletions))")
+      } else if snippetTruncated {
+        notes.append("diff truncated to \(snippet.count) lines")
+      }
+
+      if !diffHasHunks && kind == .modified {
+        notes.append("metadata-only change")
+      }
+
+      return notes
     }
   }
 
@@ -38,6 +127,21 @@ struct ChangeSummary {
 
   var fileCount: Int {
     files.count
+  }
+
+  var promptRepresentation: Prompt {
+    Prompt {
+      "Changes:"
+
+      if files.isEmpty {
+        "- No file details captured."
+      } else {
+        for file in files {
+          file
+          ""
+        }
+      }
+    }
   }
 }
 
@@ -83,6 +187,10 @@ struct DefaultDiffSummarizer: DiffSummarizer {
       let additions = diffInfo?.additions ?? 0
       let deletions = diffInfo?.deletions ?? 0
       let snippet = diffInfo?.snippet ?? defaultSnippet(for: change)
+      let snippetTruncated = diffInfo?.isTruncated ?? false
+      let isBinary = diffInfo?.isBinary ?? false
+      let lineCount = diffInfo?.lineCount ?? snippet.count
+      let hasHunks = diffInfo?.hasHunks ?? false
 
       let summary = ChangeSummary.FileSummary(
         path: change.path,
@@ -91,7 +199,11 @@ struct DefaultDiffSummarizer: DiffSummarizer {
         location: change.location,
         additions: additions,
         deletions: deletions,
-        snippet: Array(snippet.prefix(maxLinesPerFile))
+        snippet: Array(snippet.prefix(maxLinesPerFile)),
+        snippetTruncated: snippetTruncated || snippet.count > maxLinesPerFile,
+        isBinary: isBinary,
+        diffLineCount: lineCount,
+        diffHasHunks: hasHunks
       )
       summaries.append(summary)
     }
@@ -121,6 +233,10 @@ struct DefaultDiffSummarizer: DiffSummarizer {
     var additions: Int
     var deletions: Int
     var snippet: [String]
+    var lineCount: Int
+    var isTruncated: Bool
+    var isBinary: Bool
+    var hasHunks: Bool
   }
 
   private func parseDiff(_ diffText: String) -> [String: ParsedDiff] {
@@ -146,14 +262,26 @@ struct DefaultDiffSummarizer: DiffSummarizer {
       let deletions = currentLines.reduce(0) { partial, line in
         line.hasPrefix("-") && !line.hasPrefix("---") ? partial + 1 : partial
       }
+
+      let lineCount = currentLines.count
+      let hasHunks = currentLines.contains { $0.hasPrefix("@@") }
+      let isBinary = currentLines.contains { line in
+        let lowercased = line.lowercased()
+        return lowercased.hasPrefix("binary files ") || lowercased == "binary files differ"
+      }
       let snippet = Array(currentLines.prefix(maxLinesPerFile)).map { String($0.prefix(160)) }
+      let isTruncated = lineCount > maxLinesPerFile
 
       let parsed = ParsedDiff(
         path: stripDiffPrefix(targetPath),
         oldPath: cleanOldPath(currentOldPath),
         additions: additions,
         deletions: deletions,
-        snippet: snippet
+        snippet: snippet,
+        lineCount: lineCount,
+        isTruncated: isTruncated,
+        isBinary: isBinary,
+        hasHunks: hasHunks
       )
 
       results[parsed.path] = parsed
@@ -209,5 +337,16 @@ struct DefaultDiffSummarizer: DiffSummarizer {
     guard let path else { return nil }
     let stripped = stripDiffPrefix(path)
     return stripped == "/dev/null" ? nil : stripped
+  }
+}
+
+private func scopeLabel(for location: GitChangeLocation) -> String {
+  switch location {
+  case .staged:
+    return "staged"
+  case .unstaged:
+    return "unstaged"
+  case .untracked:
+    return "untracked"
   }
 }

@@ -1,18 +1,18 @@
 import Foundation
 
-enum GitChangeScope {
+enum GitChangeScope: Hashable, Codable {
   case staged
   case unstaged
   case all
 }
 
-enum GitChangeLocation {
+enum GitChangeLocation: Hashable, Codable {
   case staged
   case unstaged
   case untracked
 }
 
-enum GitChangeKind: String {
+enum GitChangeKind: String, Hashable, Codable {
   case added = "A"
   case modified = "M"
   case deleted = "D"

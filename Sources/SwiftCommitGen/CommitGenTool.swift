@@ -60,22 +60,13 @@ struct CommitGenTool {
 
     let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
 
-    if options.dryRun {
-      renderDryRun(summary, prompt: promptPackage, metadata: metadata)
-    }
-
-    if !options.dryRun && options.outputFormat == .text {
+    if options.outputFormat == .text {
       renderReviewSummary(summary)
     }
 
     logger.info("Requesting commit draft from the on-device language model…")
     var draft = try await llmClient.generateCommitDraft(from: promptPackage)
     renderer.render(draft, format: options.outputFormat)
-
-    if options.dryRun {
-      logger.info("Dry run complete. No commit was written.")
-      return
-    }
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
@@ -101,35 +92,6 @@ struct CommitGenTool {
       return "unstaged"
     case .all:
       return "staged + unstaged"
-    }
-  }
-
-  private func renderDryRun(
-    _ summary: ChangeSummary,
-    prompt: PromptPackage,
-    metadata: PromptMetadata
-  ) {
-    logger.info("Prompt style: \(metadata.style.rawValue)")
-    logger.info("Detailed change summary:")
-    for file in summary.files {
-      logger.info("  - \(file.label): \(file.path) (+\(file.additions) / -\(file.deletions))")
-      for line in file.snippet.prefix(6) {
-        logger.info("     \(line)")
-      }
-    }
-
-    logger.info("\nPrompt preview (system):")
-    for line in prompt.systemPrompt.split(separator: "\n") {
-      logger.info("  \(line)")
-    }
-
-    logger.info("\nPrompt preview (user):")
-    for line in prompt.userPrompt.split(separator: "\n").prefix(30) {
-      logger.info("  \(line)")
-    }
-
-    if prompt.userPrompt.split(separator: "\n").count > 30 {
-      logger.info("  ... (user prompt truncated)")
     }
   }
 
@@ -188,11 +150,7 @@ struct CommitGenTool {
     )
     defer { try? FileManager.default.removeItem(at: tempURL) }
 
-    var contents = draft.subject
-    if !draft.body.isEmpty {
-      contents.append("\n\n")
-      contents.append(draft.body)
-    }
+    var contents = draft.editorRepresentation
     contents.append("\n")
     try contents.write(to: tempURL, atomically: true, encoding: .utf8)
 
@@ -220,7 +178,7 @@ struct CommitGenTool {
     }
 
     let updatedContents = try String(contentsOf: tempURL, encoding: .utf8)
-    let updatedDraft = CommitDraft(responseText: updatedContents)
+    let updatedDraft = CommitDraft.fromEditorContents(updatedContents)
 
     guard !updatedDraft.subject.isEmpty else {
       logger.warning("Edited draft has an empty subject; keeping previous draft.")
