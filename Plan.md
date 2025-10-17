@@ -12,6 +12,7 @@ Current Focus (October 2025)
 ----------------------------
 - Validate prompt augmentation so each regeneration carries forward only the necessary context.
 - Track how much summary data we resend to the model and prune redundant payloads to stay within small context windows.
+- Surface prompt-budget diagnostics so we can tune heuristics with real usage data.
 - Prepare heuristics to merge user-supplied annotations with existing prompts without duplicating repo metadata.
 
 Phase 1: Project Foundations ✅
@@ -75,7 +76,6 @@ Phase 6: CLI Experience 🔄
 1. ✅ Command flow
    - ✅ Default invocation runs inspection → summarization → model call → preview.
    - ✅ Provide `--staged` to limit to staged changes.
-   - 🔜 Reintroduce `--dry-run` to preview prompts without invoking the model or editing flow.
 2. 🔄 Interactive review
    - ✅ Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
    - ✅ On accept, optionally stage files (`--stage`) and run `git commit -F -` using the generated text (`--commit`).
@@ -90,8 +90,10 @@ Phase 5b: Prompt Budget & Batching 🚧
    - ✅ Capture large/binary diff metadata to summarize oversized changes without raw snippets.
    - ✅ Add adaptive compaction that trims snippets and file counts when prompts exceed line budgets.
    - ✅ Detect files flagged as generated via `.gitattributes` (`linguist-generated`) and avoid sending their diffs.
+   - ✅ Log prompt diagnostics (line usage, truncation, generated omissions, representative hints) for every generation.
    - 🔄 Tune per-file thresholds and truncation messaging for high-volume repositories.
    - 🔄 Analyze augmented user prompts to ensure default metadata isn’t duplicated during context regeneration.
+   - 🔄 Persist diagnostics in JSON output or verbose mode for downstream tooling.
 2. ⚪ Batching strategy
    - ⚪ Estimate prompt token budgets and split large change sets into sequential model calls.
    - ⚪ Preserve context between batches while avoiding context-window overflow.
@@ -119,6 +121,6 @@ Phase 9: Documentation & Release Prep
 
 Milestones
 ----------
-- M1: Git inspection + diff summarization works with `--dry-run` (no AI).
+- M1: Git inspection + diff summarization works without invoking the model (pure analysis mode).
 - M2: Model integration produces commit proposals (manual acceptance).
 - M3: Configurable CLI with tests and documentation ready for v0.1.0.
