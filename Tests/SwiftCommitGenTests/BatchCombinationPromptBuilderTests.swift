@@ -86,8 +86,8 @@ struct BatchCombinationPromptBuilderTests {
     #expect(usages.allSatisfy { $0.tokenEstimate > 0 })
     #expect(usages.contains { $0.path == "Docs/Guide.md" && $0.usedFullSnippet == false })
     #expect(usages.contains { $0.path == "Scripts/build.sh" && $0.usedFullSnippet == true })
-  #expect(package.diagnostics.tokenEstimateMatchesUsageSum())
-  #expect(package.diagnostics.estimatedLineCount >= 14)
+    #expect(package.diagnostics.tokenEstimateMatchesUsageSum())
+    #expect(package.diagnostics.estimatedLineCount >= 14)
 
     let instructions = String(describing: package.systemPrompt)
     #expect(instructions.contains("You are an AI assistant"))
@@ -124,7 +124,8 @@ struct BatchCombinationPromptBuilderTests {
       kind: file.kind.description,
       location: .staged,
       lineCount: max(1, additions + deletions),
-      tokenEstimate: PromptDiagnostics.tokenEstimate(forCharacterCount: max(1, additions + deletions) * 40),
+      tokenEstimate: PromptDiagnostics.tokenEstimate(
+        forCharacterCount: max(1, additions + deletions) * 40),
       isGenerated: isGenerated,
       isBinary: false,
       snippetTruncated: false,
@@ -165,8 +166,8 @@ struct BatchCombinationPromptBuilderTests {
   }
 }
 
-private extension PromptDiagnostics {
-  func tokenEstimateMatchesUsageSum() -> Bool {
+extension PromptDiagnostics {
+  fileprivate func tokenEstimateMatchesUsageSum() -> Bool {
     let usageTotal = fileUsages.reduce(0) { $0 + $1.tokenEstimate }
     return usageTotal <= estimatedTokenCount || estimatedTokenCount == 0
   }

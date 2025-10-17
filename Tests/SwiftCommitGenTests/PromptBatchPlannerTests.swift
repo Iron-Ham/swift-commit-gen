@@ -133,7 +133,8 @@ struct PromptBatchPlannerTests {
       diffLineCount: fullB.count
     )
 
-    let compactTotal = tokenEstimate(for: fileA, mode: .compact)
+    let compactTotal =
+      tokenEstimate(for: fileA, mode: .compact)
       + tokenEstimate(for: fileB, mode: .compact)
     let deltaA = tokenEstimate(for: fileA, mode: .full) - tokenEstimate(for: fileA, mode: .compact)
     let deltaB = tokenEstimate(for: fileB, mode: .full) - tokenEstimate(for: fileB, mode: .compact)
