@@ -66,9 +66,9 @@ struct CommitGenTool {
       renderReviewSummary(summary)
     }
 
-  logger.info("Requesting commit draft from the on-device language model…")
-  var draft = try await llmClient.generateCommitDraft(from: promptPackage)
-  renderer.render(draft, format: options.outputFormat)
+    logger.info("Requesting commit draft from the on-device language model…")
+    var draft = try await llmClient.generateCommitDraft(from: promptPackage)
+    renderer.render(draft, format: options.outputFormat)
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
@@ -81,7 +81,8 @@ struct CommitGenTool {
     if let reviewedDraft = try await reviewDraft(
       initialDraft: draft,
       regenerate: { additionalContext in
-        let package = additionalContext.map { promptPackage.appendingUserContext($0) }
+        let package =
+          additionalContext.map { promptPackage.appendingUserContext($0) }
           ?? promptPackage
         return try await llmClient.generateCommitDraft(from: package)
       }
@@ -116,7 +117,9 @@ struct CommitGenTool {
     var currentDraft = initialDraft
 
     reviewLoop: while true {
-      logger.info("Options: [y] accept, [e] edit in $EDITOR, [r] regenerate, [c] regenerate with context, [n] abort")
+      logger.info(
+        "Options: [y] accept, [e] edit in $EDITOR, [r] regenerate, [c] regenerate with context, [n] abort"
+      )
       guard let response = promptUser("Apply commit draft? [y/e/r/c/n]: ") else {
         continue
       }
@@ -163,7 +166,8 @@ struct CommitGenTool {
   }
 
   private func promptForAdditionalContext() -> String? {
-    logger.info("Enter additional context for the next draft (blank line to finish, Ctrl+D to cancel):")
+    logger.info(
+      "Enter additional context for the next draft (blank line to finish, Ctrl+D to cancel):")
 
     var lines: [String] = []
     while let line = readLine() {
@@ -272,7 +276,7 @@ struct CommitGenTool {
         consoleTheme.applying(consoleTheme.additions, to: "+\(file.additions)"),
         consoleTheme.applying(consoleTheme.muted, to: " / "),
         consoleTheme.applying(consoleTheme.deletions, to: "-\(file.deletions)"),
-        consoleTheme.applying(consoleTheme.muted, to: ")")
+        consoleTheme.applying(consoleTheme.muted, to: ")"),
       ].joined()
       let location = consoleTheme.applying(consoleTheme.metadata, to: "[\(file.location)]")
       logger.info("\(bullet)\(path) \(stats) \(location)")

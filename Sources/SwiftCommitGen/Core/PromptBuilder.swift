@@ -114,7 +114,8 @@ struct DefaultPromptBuilder: PromptBuilder {
       }
 
       displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
-      isCompacted = displaySummary.fileCount < summary.fileCount
+      isCompacted =
+        displaySummary.fileCount < summary.fileCount
         || snippetLimit < maxSnippetLines
         || fileLimit < previousFileLimit
         || snippetLimit < previousSnippet
@@ -147,7 +148,7 @@ struct DefaultPromptBuilder: PromptBuilder {
       The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.
 
       Be brief and concise.
-      
+
       Do NOT include a description of changes in "lock" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.
 
       When more explanation is helpful, provide a short body with full sentences.
@@ -227,15 +228,15 @@ private func estimatedLineCount(
   var total = 0
 
   // Metadata lines
-  total += 4 // repository, branch, scope, style
-  total += 1 // totals line
+  total += 4  // repository, branch, scope, style
+  total += 1  // totals line
 
   if includesCompactionNote {
     total += 1
   }
 
   if displaySummary.fileCount < fullSummary.fileCount {
-    total += 1 // showing first N files
+    total += 1  // showing first N files
 
     let remainder = Array(fullSummary.files.dropFirst(displaySummary.fileCount))
     let groupedByKind = Dictionary(grouping: remainder, by: { $0.kind.description })
@@ -253,7 +254,7 @@ private func estimatedLineCount(
   for (index, file) in displaySummary.files.enumerated() {
     total += file.estimatedPromptLineCount()
     if index < displaySummary.files.count - 1 {
-      total += 1 // blank line between file blocks
+      total += 1  // blank line between file blocks
     }
   }
 

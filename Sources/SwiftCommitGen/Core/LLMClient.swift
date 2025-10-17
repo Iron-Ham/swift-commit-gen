@@ -7,7 +7,10 @@ protocol LLMClient {
 
 @Generable(description: "A commit for changes made in a git repository.")
 struct CommitDraft: Hashable, Codable, Sendable {
-  @Guide(description: "The title of a commit. It should be no longer than 50 characters and should summarize the contents of the chaneset for other developers reading the commit history.")
+  @Guide(
+    description:
+      "The title of a commit. It should be no longer than 50 characters and should summarize the contents of the chaneset for other developers reading the commit history."
+  )
   var subject: String
   @Guide(description: "A detailed description of the the purposes of the changes.")
   var body: String?
@@ -98,13 +101,14 @@ struct FoundationModelsClient: LLMClient {
       throw CommitGenError.modelUnavailable(reason: reason)
     }
 
-
     let session = LanguageModelSession(
       model: model,
       instructions: prompt.systemPrompt
     )
 
-    let response = try await session.respond(generating: CommitDraft.self, options: generationOptions) {
+    let response = try await session.respond(
+      generating: CommitDraft.self, options: generationOptions
+    ) {
       prompt.userPrompt
     }
 

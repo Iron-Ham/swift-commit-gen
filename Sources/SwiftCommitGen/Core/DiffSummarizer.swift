@@ -14,7 +14,7 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     var isBinary: Bool
     var diffLineCount: Int
     var diffHasHunks: Bool
-  var isGenerated: Bool
+    var isGenerated: Bool
 
     var label: String {
       "\(kind.description.capitalized) \(locationLabel)"
@@ -58,7 +58,7 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     }
 
     func estimatedPromptLineCount() -> Int {
-      var lines = 1 // header line per file
+      var lines = 1  // header line per file
       lines += detailNotes.count
 
       if shouldRenderSnippet {
@@ -74,7 +74,8 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     private static let largeDiffLineThreshold = 200
 
     private var diffIsLarge: Bool {
-      additions + deletions >= Self.largeChangeThreshold || diffLineCount >= Self.largeDiffLineThreshold
+      additions + deletions >= Self.largeChangeThreshold
+        || diffLineCount >= Self.largeDiffLineThreshold
     }
 
     private var shouldRenderSnippet: Bool {
@@ -225,7 +226,8 @@ struct DefaultDiffSummarizer: DiffSummarizer {
       let lineCount = diffInfo?.lineCount ?? snippet.count
       let hasHunks = diffInfo?.hasHunks ?? false
 
-      let isGenerated = generatedLookup[change.path]
+      let isGenerated =
+        generatedLookup[change.path]
         ?? change.oldPath.flatMap { generatedLookup[$0] }
         ?? false
 

@@ -1,9 +1,9 @@
 import Foundation
 
 #if canImport(Darwin)
-import Darwin
+  import Darwin
 #elseif canImport(Glibc)
-import Glibc
+  import Glibc
 #endif
 
 struct ConsoleTheme {
@@ -51,44 +51,13 @@ struct ConsoleTheme {
   var metadata: Style
   var commitSubject: Style
 
-  init(
-    isEnabled: Bool,
-    infoLabel: Style,
-    infoMessage: Style,
-    warningLabel: Style,
-    warningMessage: Style,
-    errorLabel: Style,
-    errorMessage: Style,
-    muted: Style,
-    emphasis: Style,
-    path: Style,
-    additions: Style,
-    deletions: Style,
-    metadata: Style,
-    commitSubject: Style
-  ) {
-    self.isEnabled = isEnabled
-    self.infoLabel = infoLabel
-    self.infoMessage = infoMessage
-    self.warningLabel = warningLabel
-    self.warningMessage = warningMessage
-    self.errorLabel = errorLabel
-    self.errorMessage = errorMessage
-    self.muted = muted
-    self.emphasis = emphasis
-    self.path = path
-    self.additions = additions
-    self.deletions = deletions
-    self.metadata = metadata
-    self.commitSubject = commitSubject
-  }
-
   static func resolve(
     stream: Stream,
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> ConsoleTheme {
     let forceColor = environment["CLICOLOR_FORCE"].flatMap(Int.init) ?? 0
-    let disableColor = environment["NO_COLOR"] != nil
+    let disableColor =
+      environment["NO_COLOR"] != nil
       || (environment["CLICOLOR"].flatMap(Int.init) == 0)
 
     let tty = isTerminal(stream.fileHandle.fileDescriptor)
@@ -118,9 +87,9 @@ struct ConsoleTheme {
 
   private static func isTerminal(_ descriptor: Int32) -> Bool {
     #if os(Windows)
-    return false
+      return false
     #else
-    return isatty(descriptor) != 0
+      return isatty(descriptor) != 0
     #endif
   }
 }
