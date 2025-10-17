@@ -50,6 +50,17 @@ struct PromptDiagnostics: Codable, Sendable {
     var isGenerated: Bool
   }
 
+  struct FileUsage: Codable, Hashable, Sendable {
+    var path: String
+    var kind: String
+    var location: GitChangeLocation
+    var lineCount: Int
+    var tokenEstimate: Int
+    var isGenerated: Bool
+    var isBinary: Bool
+    var snippetTruncated: Bool
+  }
+
   var estimatedLineCount: Int
   var lineBudget: Int
   var userContextLineCount: Int = 0
@@ -75,6 +86,8 @@ struct PromptDiagnostics: Codable, Sendable {
   var generatedFilesOmitted: Int {
     max(0, generatedFilesTotal - generatedFilesDisplayed)
   }
+
+  var fileUsages: [FileUsage]
 
   var remainderCount: Int
   var remainderAdditions: Int
@@ -501,6 +514,23 @@ private func makeDiagnostics(
     remainder: remainder
   )
   let tokenLimit = 4_096
+  let fileUsages = displaySummary.files.map { file -> PromptDiagnostics.FileUsage in
+    let lines = file.promptLines()
+    let characterCount = lines.reduce(0) { partial, line in
+      partial + line.count + 1
+    }
+    let tokenEstimate = PromptDiagnostics.tokenEstimate(forCharacterCount: characterCount)
+    return PromptDiagnostics.FileUsage(
+      path: file.path,
+      kind: file.kind.description,
+      location: file.location,
+      lineCount: lines.count,
+      tokenEstimate: tokenEstimate,
+      isGenerated: file.isGenerated,
+      isBinary: file.isBinary,
+      snippetTruncated: file.snippetTruncated
+    )
+  }
 
   return PromptDiagnostics(
     estimatedLineCount: estimatedLines,
@@ -516,6 +546,7 @@ private func makeDiagnostics(
     compactionApplied: isCompacted,
     generatedFilesTotal: totalGenerated,
     generatedFilesDisplayed: displayedGenerated,
+    fileUsages: fileUsages,
     remainderCount: remainder.count,
     remainderAdditions: remainder.additions,
     remainderDeletions: remainder.deletions,

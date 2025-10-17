@@ -350,6 +350,36 @@ struct CommitGenTool {
       )
     }
 
+    if !diagnostics.fileUsages.isEmpty {
+      let heaviest = diagnostics.fileUsages.sorted { lhs, rhs in
+        lhs.tokenEstimate > rhs.tokenEstimate
+      }
+      let topContributors = heaviest.prefix(3).map { usage -> String in
+        let path = consoleTheme.applying(consoleTheme.path, to: usage.path)
+        let tokenText = consoleTheme.applying(consoleTheme.emphasis, to: "\(usage.tokenEstimate)")
+        let lineText = consoleTheme.applying(consoleTheme.muted, to: "\(usage.lineCount) ln")
+        var descriptors: [String] = []
+        if usage.isGenerated {
+          descriptors.append("generated")
+        }
+        if usage.isBinary {
+          descriptors.append("binary")
+        }
+        if usage.snippetTruncated {
+          descriptors.append("trimmed")
+        }
+        let descriptorText: String
+        if descriptors.isEmpty {
+          descriptorText = ""
+        } else {
+          let joined = descriptors.joined(separator: ", ")
+          descriptorText = " " + consoleTheme.applying(consoleTheme.muted, to: "[\(joined)]")
+        }
+        return "\(path) (\(tokenText) tok, \(lineText))\(descriptorText)"
+      }
+      logger.info("Top prompt contributors: \(topContributors.joined(separator: "; ")).")
+    }
+
     if diagnostics.remainderCount > 0 {
       var remainderSummary =
         "Remaining \(diagnostics.remainderCount) file(s) contribute +\(diagnostics.remainderAdditions) / -\(diagnostics.remainderDeletions)"
