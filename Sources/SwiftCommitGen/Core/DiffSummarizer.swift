@@ -56,6 +56,19 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
       }
     }
 
+    func estimatedPromptLineCount() -> Int {
+      var lines = 1 // header line per file
+      lines += detailNotes.count
+
+      if shouldRenderSnippet {
+        lines += snippet.count
+      } else if !hasExplicitNote {
+        lines += 1
+      }
+
+      return lines
+    }
+
     private static let largeChangeThreshold = 400
     private static let largeDiffLineThreshold = 200
 
@@ -104,7 +117,11 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
       if diffIsLarge {
         notes.append("large diff (+\(additions)/-\(deletions))")
       } else if snippetTruncated {
-        notes.append("diff truncated to \(snippet.count) lines")
+        if snippet.isEmpty {
+          notes.append("diff omitted to reduce prompt size")
+        } else {
+          notes.append("diff truncated to \(snippet.count) lines")
+        }
       }
 
       if !diffHasHunks && kind == .modified {

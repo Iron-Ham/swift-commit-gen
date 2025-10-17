@@ -58,25 +58,81 @@ struct PromptPackage {
 struct DefaultPromptBuilder: PromptBuilder {
   private let maxFiles: Int
   private let maxSnippetLines: Int
+  private let maxPromptLineEstimate: Int
+  private let minFiles: Int
+  private let minSnippetLines: Int
+  private let snippetReductionStep: Int
 
-  init(maxFiles: Int = 12, maxSnippetLines: Int = 6) {
+  init(
+    maxFiles: Int = 12,
+    maxSnippetLines: Int = 6,
+    maxPromptLineEstimate: Int = 400,
+    minFiles: Int = 3,
+    minSnippetLines: Int = 0,
+    snippetReductionStep: Int = 2
+  ) {
     self.maxFiles = maxFiles
     self.maxSnippetLines = maxSnippetLines
+    self.maxPromptLineEstimate = maxPromptLineEstimate
+    self.minFiles = minFiles
+    self.minSnippetLines = minSnippetLines
+    self.snippetReductionStep = max(1, snippetReductionStep)
   }
 
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage {
-    let trimmedFiles = summary.files.prefix(maxFiles).map { file -> ChangeSummary.FileSummary in
-      var limited = file
-      if maxSnippetLines > 0, limited.snippet.count > maxSnippetLines {
-        limited.snippet = Array(limited.snippet.prefix(maxSnippetLines))
-        limited.snippetTruncated = true
+    let system = buildSystemPrompt(style: metadata.style)
+
+    var fileLimit = min(maxFiles, summary.files.count)
+    var snippetLimit = maxSnippetLines
+
+    var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+    var isCompacted = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+
+    var user = buildUserPrompt(
+      displaySummary: displaySummary,
+      fullSummary: summary,
+      metadata: metadata,
+      isCompacted: isCompacted
+    )
+
+    var estimate = estimatedLineCount(
+      displaySummary: displaySummary,
+      fullSummary: summary,
+      includesCompactionNote: isCompacted
+    )
+
+    while estimate > maxPromptLineEstimate {
+      let previousSnippet = snippetLimit
+      let previousFileLimit = fileLimit
+
+      if snippetLimit > minSnippetLines {
+        snippetLimit = max(minSnippetLines, snippetLimit - snippetReductionStep)
+      } else if fileLimit > minFiles {
+        fileLimit = max(minFiles, fileLimit - 1)
+      } else {
+        break
       }
-      return limited
+
+      displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+      isCompacted = displaySummary.fileCount < summary.fileCount
+        || snippetLimit < maxSnippetLines
+        || fileLimit < previousFileLimit
+        || snippetLimit < previousSnippet
+
+      user = buildUserPrompt(
+        displaySummary: displaySummary,
+        fullSummary: summary,
+        metadata: metadata,
+        isCompacted: isCompacted
+      )
+
+      estimate = estimatedLineCount(
+        displaySummary: displaySummary,
+        fullSummary: summary,
+        includesCompactionNote: isCompacted
+      )
     }
 
-    let trimmedSummary = ChangeSummary(files: Array(trimmedFiles))
-    let system = buildSystemPrompt(style: metadata.style)
-    let user = buildUserPrompt(displaySummary: trimmedSummary, fullSummary: summary, metadata: metadata)
     return PromptPackage(systemPrompt: system, userPrompt: user)
   }
 
@@ -104,11 +160,16 @@ struct DefaultPromptBuilder: PromptBuilder {
 private func buildUserPrompt(
   displaySummary: ChangeSummary,
   fullSummary: ChangeSummary,
-  metadata: PromptMetadata
+  metadata: PromptMetadata,
+  isCompacted: Bool
 ) -> Prompt {
   Prompt {
     metadata
     "Totals: \(fullSummary.fileCount) files; +\(fullSummary.totalAdditions) / -\(fullSummary.totalDeletions)"
+
+    if isCompacted {
+      "Context trimmed to stay within the model window; prioritize the most impactful changes."
+    }
 
     if displaySummary.fileCount < fullSummary.fileCount {
       let remainder = Array(fullSummary.files.dropFirst(displaySummary.fileCount))
@@ -132,4 +193,69 @@ private func buildUserPrompt(
 
     displaySummary
   }
+}
+
+private func trimSummary(
+  _ summary: ChangeSummary,
+  fileLimit: Int,
+  snippetLimit: Int
+) -> ChangeSummary {
+  let limitedFiles = summary.files.prefix(fileLimit).map { file -> ChangeSummary.FileSummary in
+    var limited = file
+
+    if snippetLimit <= 0 {
+      if !limited.snippet.isEmpty {
+        limited.snippet = []
+        limited.snippetTruncated = true
+      }
+    } else if limited.snippet.count > snippetLimit {
+      limited.snippet = Array(limited.snippet.prefix(snippetLimit))
+      limited.snippetTruncated = true
+    }
+
+    return limited
+  }
+
+  return ChangeSummary(files: Array(limitedFiles))
+}
+
+private func estimatedLineCount(
+  displaySummary: ChangeSummary,
+  fullSummary: ChangeSummary,
+  includesCompactionNote: Bool
+) -> Int {
+  var total = 0
+
+  // Metadata lines
+  total += 4 // repository, branch, scope, style
+  total += 1 // totals line
+
+  if includesCompactionNote {
+    total += 1
+  }
+
+  if displaySummary.fileCount < fullSummary.fileCount {
+    total += 1 // showing first N files
+
+    let remainder = Array(fullSummary.files.dropFirst(displaySummary.fileCount))
+    let groupedByKind = Dictionary(grouping: remainder, by: { $0.kind.description })
+      .mapValues { $0.count }
+      .sorted { lhs, rhs in
+        if lhs.value == rhs.value {
+          return lhs.key < rhs.key
+        }
+        return lhs.value > rhs.value
+      }
+
+    total += min(4, groupedByKind.count)
+  }
+
+  for (index, file) in displaySummary.files.enumerated() {
+    total += file.estimatedPromptLineCount()
+    if index < displaySummary.files.count - 1 {
+      total += 1 // blank line between file blocks
+    }
+  }
+
+  return total
 }
