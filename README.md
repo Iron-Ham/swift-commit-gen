@@ -165,10 +165,14 @@ swiftcommitgen --format json
 
 ### Help
 
-Run:
+For a full list of commands:
 
 ```
-swiftcommitgen --help
+swiftcommitgen help # or swiftcommitgen -h
 ```
 
-to view authoritative usage. You can still use `swiftcommitgen generate --help`—both are equivalent.
+For help with a specific command, such as `generate`:
+
+```
+swiftcommitgen help generate # or swiftcommitgen generate -h
+```
