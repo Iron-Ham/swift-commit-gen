@@ -17,7 +17,7 @@ struct CommitGenTool {
     promptBuilder: PromptBuilder = DefaultPromptBuilder(),
     llmClient: LLMClient = FoundationModelsClient(),
     renderer: Renderer = ConsoleRenderer(),
-    logger: CommitGenLogger = CommitGenLogger()
+    logger: CommitGenLogger? = nil
   ) {
     self.options = options
     self.gitClient = gitClient
@@ -25,8 +25,8 @@ struct CommitGenTool {
     self.promptBuilder = promptBuilder
     self.llmClient = llmClient
     self.renderer = renderer
-    self.logger = logger
-    self.consoleTheme = logger.consoleTheme
+    self.logger = logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
+    self.consoleTheme = self.logger.consoleTheme
   }
 
   func run() async throws {
@@ -41,13 +41,13 @@ struct CommitGenTool {
       throw CommitGenError.cleanWorkingTree
     }
 
-    logger.info("Detected \(changes.count) pending change(s) in \(describe(scope: scope)) scope.")
+    logger.notice("Detected \(changes.count) pending change(s) in \(describe(scope: scope)) scope.")
 
     let summary = try await summarizer.summarize(
       status: status,
       includeStagedOnly: options.includeStagedOnly
     )
-    logger.info(
+    logger.notice(
       "Summary: \(summary.fileCount) file(s), +\(summary.totalAdditions) / -\(summary.totalDeletions)"
     )
 
@@ -82,29 +82,26 @@ struct CommitGenTool {
     var draft = outcome.draft
     renderer.render(draft, format: options.outputFormat, report: outcome.report)
 
-    if options.isVerbose, let report = outcome.report, report.mode == .batched {
+    if let report = outcome.report, report.mode == .batched {
       for info in report.batches {
-        let tokenUsage =
-          info.promptDiagnostics.actualTotalTokenCount
-          ?? info.promptDiagnostics.estimatedTokenCount
-        let subjectPreview =
-          info.draft.subject.isEmpty
-          ? "(empty)"
-          : info.draft.subject
-        let samplePaths = info.filePaths.prefix(3)
-        let pathPreview: String
-        if samplePaths.isEmpty {
-          pathPreview = "no files tracked"
-        } else if samplePaths.count == info.fileCount {
-          pathPreview = samplePaths.joined(separator: ", ")
-        } else {
-          pathPreview =
-            samplePaths.joined(separator: ", ")
-            + " +\(info.fileCount - samplePaths.count) more"
+        logger.debug {
+          let tokenUsage =
+            info.promptDiagnostics.actualTotalTokenCount
+            ?? info.promptDiagnostics.estimatedTokenCount
+          let subjectPreview = info.draft.subject.isEmpty ? "(empty)" : info.draft.subject
+          let samplePaths = info.filePaths.prefix(3)
+          let pathPreview: String
+          if samplePaths.isEmpty {
+            pathPreview = "no files tracked"
+          } else if samplePaths.count == info.fileCount {
+            pathPreview = samplePaths.joined(separator: ", ")
+          } else {
+            pathPreview =
+              samplePaths.joined(separator: ", ") + "+\(info.fileCount - samplePaths.count) more"
+          }
+          return
+            "Batch \(info.index + 1): \(info.fileCount) file(s), ~\(tokenUsage) tokens, subject: \(subjectPreview). Files: \(pathPreview)."
         }
-        logger.info(
-          "Batch \(info.index + 1): \(info.fileCount) file(s), ~\(tokenUsage) tokens, subject: \(subjectPreview). Files: \(pathPreview)."
-        )
       }
     }
 
@@ -122,13 +119,9 @@ struct CommitGenTool {
         let package =
           additionalContext.map { outcome.promptPackage.appendingUserContext($0) }
           ?? outcome.promptPackage
-        if options.isVerbose {
-          logPromptDiagnostics(package.diagnostics)
-        }
+        logPromptDiagnostics(package.diagnostics)
         let regeneration = try await llmClient.generateCommitDraft(from: package)
-        if options.isVerbose {
-          logPromptDiagnostics(regeneration.diagnostics)
-        }
+        logPromptDiagnostics(regeneration.diagnostics)
         return regeneration.draft
       }
     ) {
@@ -162,7 +155,7 @@ struct CommitGenTool {
     var currentDraft = initialDraft
 
     reviewLoop: while true {
-      logger.info(
+      logger.notice(
         "Options: [y] accept, [e] edit in $EDITOR, [r] regenerate, [c] regenerate with context, [n] abort"
       )
       guard let response = promptUser("Apply commit draft? [y/e/r/c/n]: ") else {
@@ -282,7 +275,7 @@ struct CommitGenTool {
     summary: ChangeSummary,
     status: GitStatus
   ) async throws {
-    logger.info("Commit draft accepted.")
+    logger.notice("Commit draft accepted.")
 
     guard options.autoCommit else {
       logger.warning(
@@ -302,17 +295,17 @@ struct CommitGenTool {
         }
 
         try await stageChanges(for: status)
-        logger.info("Staged unstaged/untracked changes before committing.")
+        logger.notice("Staged unstaged/untracked changes before committing.")
       }
     }
 
     try await gitClient.commit(message: draft.commitMessage)
-    logger.info("Git commit created successfully.")
+    logger.notice("Git commit created successfully.")
   }
 
   private func renderReviewSummary(_ summary: ChangeSummary) {
     guard !summary.files.isEmpty else { return }
-    logger.info("Reviewing \(summary.fileCount) file(s):")
+    logger.notice("Reviewing \(summary.fileCount) file(s):")
     for file in summary.files {
       let bullet = consoleTheme.applying(consoleTheme.muted, to: "  - ")
       let path = consoleTheme.applying(consoleTheme.path, to: file.path)
@@ -324,11 +317,12 @@ struct CommitGenTool {
         consoleTheme.applying(consoleTheme.muted, to: ")"),
       ].joined()
       let location = consoleTheme.applying(consoleTheme.metadata, to: "[\(file.location)]")
-      logger.info("\(bullet)\(path) \(stats) \(location)")
+      logger.notice("\(bullet)\(path) \(stats) \(location)")
     }
   }
 
   private func logPromptDiagnostics(_ diagnostics: PromptDiagnostics) {
+    guard logger.isVerboseEnabled else { return }
     let lineUsage = "\(diagnostics.estimatedLineCount)/\(diagnostics.lineBudget)"
     let highlightedLines = consoleTheme.applying(consoleTheme.emphasis, to: lineUsage)
     let fileUsage = "\(diagnostics.displayedFiles)/\(diagnostics.totalFiles)"
@@ -341,7 +335,7 @@ struct CommitGenTool {
       summaryComponents.append(consoleTheme.applying(consoleTheme.muted, to: "compacted"))
     }
 
-    logger.info("Prompt budget: \(summaryComponents.joined(separator: ", "))")
+    logger.debug("Prompt budget: \(summaryComponents.joined(separator: ", "))")
 
     let tokenUsage = diagnostics.actualTotalTokenCount ?? diagnostics.estimatedTokenCount
     let tokenLabel = diagnostics.actualTotalTokenCount == nil ? "Estimated tokens" : "Tokens used"
@@ -349,33 +343,33 @@ struct CommitGenTool {
       consoleTheme.emphasis,
       to: "\(tokenUsage)/\(diagnostics.estimatedTokenLimit)"
     )
-    logger.info("\(tokenLabel): \(tokenUsageText)")
+    logger.debug("\(tokenLabel): \(tokenUsageText)")
 
     if let promptTokens = diagnostics.actualPromptTokenCount,
       let outputTokens = diagnostics.actualOutputTokenCount
     {
-      logger.info("Token breakdown: prompt \(promptTokens), output \(outputTokens)")
+      logger.debug("Token breakdown: prompt \(promptTokens), output \(outputTokens)")
     }
 
     let warningThreshold = Int(Double(diagnostics.estimatedTokenLimit) * 0.9)
     if warningThreshold > 0 && tokenUsage >= warningThreshold {
-      logger.warning(
+      logger.debug(
         "Prompt is approaching the \(diagnostics.estimatedTokenLimit)-token window; consider trimming context if generation fails."
       )
     }
 
     if diagnostics.userContextLineCount > 0 {
-      logger.info("User context added \(diagnostics.userContextLineCount) line(s) to the prompt.")
+      logger.debug("User context added \(diagnostics.userContextLineCount) line(s) to the prompt.")
     }
 
     if diagnostics.snippetFilesTruncated > 0 {
-      logger.info(
+      logger.debug(
         "Truncated \(diagnostics.snippetFilesTruncated) snippet(s) to \(diagnostics.snippetLineLimit) line(s)."
       )
     }
 
     if diagnostics.generatedFilesOmitted > 0 {
-      logger.info(
+      logger.debug(
         "Omitted \(diagnostics.generatedFilesOmitted) generated file(s) per .gitattributes."
       )
     }
@@ -410,7 +404,7 @@ struct CommitGenTool {
         }
         return "\(path) (\(tokenText) tok, \(lineText))\(descriptorText)"
       }
-      logger.info("Top prompt contributors: \(topContributors.joined(separator: "; ")).")
+      logger.debug("Top prompt contributors: \(topContributors.joined(separator: "; ")).")
     }
 
     if diagnostics.remainderCount > 0 {
@@ -419,12 +413,12 @@ struct CommitGenTool {
       if diagnostics.remainderGeneratedCount > 0 {
         remainderSummary += " (\(diagnostics.remainderGeneratedCount) generated)"
       }
-      logger.info(remainderSummary + ".")
+      logger.debug(remainderSummary + ".")
 
       if !diagnostics.remainderHintFiles.isEmpty {
         let sample = diagnostics.remainderHintFiles.prefix(3).map { $0.path }
         if !sample.isEmpty {
-          logger.info("Example paths not shown in prompt: \(sample.joined(separator: ", ")).")
+          logger.debug("Example paths not shown in prompt: \(sample.joined(separator: ", ")).")
         }
       }
     }
@@ -466,15 +460,11 @@ extension CommitGenTool {
     summary: ChangeSummary, metadata: PromptMetadata
   ) async throws -> GenerationOutcome {
     let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
-    if options.isVerbose {
-      logPromptDiagnostics(promptPackage.diagnostics)
-    }
+    logPromptDiagnostics(promptPackage.diagnostics)
 
     logger.info("Requesting commit draft from the on-device language model…")
     let generation = try await llmClient.generateCommitDraft(from: promptPackage)
-    if options.isVerbose {
-      logPromptDiagnostics(generation.diagnostics)
-    }
+    logPromptDiagnostics(generation.diagnostics)
 
     return GenerationOutcome(
       draft: generation.draft,
@@ -493,7 +483,7 @@ extension CommitGenTool {
     metadata: PromptMetadata,
     fullSummary: ChangeSummary
   ) async throws -> GenerationOutcome {
-    logger.info(
+    logger.notice(
       "Large change set spans \(fullSummary.fileCount) file(s); splitting into \(batches.count) prompt batch(es)."
     )
 
@@ -524,15 +514,11 @@ extension CommitGenTool {
       let additionalContext = contextLines.joined(separator: "\n")
       batchPackage = batchPackage.appendingUserContext(additionalContext)
 
-      if options.isVerbose {
-        logPromptDiagnostics(batchPackage.diagnostics)
-      }
+      logPromptDiagnostics(batchPackage.diagnostics)
 
       let generation = try await llmClient.generateCommitDraft(from: batchPackage)
-      if options.isVerbose {
-        logPromptDiagnostics(generation.diagnostics)
-        logger.info("Batch \(batchNumber) partial subject: \(generation.draft.subject)")
-      }
+      logPromptDiagnostics(generation.diagnostics)
+      logger.debug("Batch \(batchNumber) partial subject: \(generation.draft.subject)")
 
       let partial = BatchPartialDraft(
         batchIndex: index,
@@ -559,15 +545,11 @@ extension CommitGenTool {
     let combinationBuilder = BatchCombinationPromptBuilder()
     let combinationPrompt = combinationBuilder.makePrompt(
       metadata: metadata, partials: sortedPartials)
-    if options.isVerbose {
-      logPromptDiagnostics(combinationPrompt.diagnostics)
-    }
+    logPromptDiagnostics(combinationPrompt.diagnostics)
 
     logger.info("Combining \(partialDrafts.count) partial draft(s) into a unified commit message…")
     let combinationGeneration = try await llmClient.generateCommitDraft(from: combinationPrompt)
-    if options.isVerbose {
-      logPromptDiagnostics(combinationGeneration.diagnostics)
-    }
+    logPromptDiagnostics(combinationGeneration.diagnostics)
 
     return GenerationOutcome(
       draft: combinationGeneration.draft,

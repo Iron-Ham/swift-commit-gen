@@ -84,9 +84,81 @@ Or, after installation:
 swiftcommitgen generate
 ```
 
-Key options:
-- `--staged`: limit analysis to staged changes only.
-- `--format json`: emit the generated draft as JSON (skips interactive review).
-- `--commit`: automatically run `git commit` after you accept the draft (combine with `--stage` to add unstaged files first).
+### Command
 
-Pass `--help` to list all available flags.
+```
+swiftcommitgen generate [OPTIONS]
+```
+
+### Generation Flow
+1. Inspect repository (staged + optionally unstaged changes)
+2. Summarize diff and plan prompt batches if large
+3. Request draft commit message from on-device model
+4. Interactive review loop (accept / edit / regenerate)
+5. Optional auto-stage and auto-commit
+
+### Flags & Options
+
+| Flag | Short | Description | Default | Notes |
+|------|-------|-------------|---------|-------|
+| `--staged-only` | `-s` | Only consider staged changes (ignore unstaged/untracked) | Off | Unstaged changes still can be staged later if `--stage` and `--commit` used. |
+| `--format <text|json>` |  | Output format for the draft | `text` | JSON skips interactive review (no edit/regen loop). |
+| `--style <summary|conventional|detailed>` |  | Prompt style influencing draft format | `summary` | Conventional follows Conventional Commits subject style. |
+| `--commit` / `--no-commit` |  | Apply the accepted draft with `git commit` | On | `--no-commit` leaves the draft uncommitted. |
+| `--stage` / `--no-stage` |  | Stage unstaged/untracked files before committing | On (when `--commit`) | Ignored if `--no-commit`. |
+| `--verbose` | `-v` | Emit detailed prompt diagnostics and debug lines | Off | Shows `[DEBUG]` messages. Overrides `--quiet`. |
+| `--quiet` | `-q` | Suppress routine info lines | Off | Hides `[INFO]` but keeps `[NOTICE]`, warnings, errors. Ignored if `--verbose` is present. |
+
+### Verbosity Levels
+
+The logger uses distinct levels to balance clarity and noise:
+
+- `[ERROR]`: Fatal issues preventing progress
+- `[WARNING]`: Non-fatal problems or user action advisories
+- `[NOTICE]`: Essential workflow milestones (always shown, even with `--quiet`)
+- `[INFO]`: Routine progress details (hidden with `--quiet`)
+- `[DEBUG]`: High-volume diagnostics (only with `--verbose`)
+
+Precedence: `--verbose` > `--quiet`. Supplying both yields verbose output.
+
+### Examples
+
+Generate and interactively accept a draft (default):
+
+```
+swiftcommitgen generate
+```
+
+Limit to staged changes and auto-commit:
+
+```
+swiftcommitgen generate --staged-only --commit
+```
+
+Show detailed diagnostics while still auto-committing unstaged files:
+
+```
+swiftcommitgen generate --verbose --commit --stage
+```
+
+Minimal essential output (quiet mode) but still commit:
+
+```
+swiftcommitgen generate --quiet --commit
+```
+
+Produce machine-readable JSON (no interactive loop):
+
+```
+swiftcommitgen generate --format json
+```
+
+### Help
+
+Run:
+
+```
+swiftcommitgen generate --help
+```
+
+to view authoritative usage from the parser.

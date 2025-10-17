@@ -42,8 +42,15 @@ struct GenerateCommand: AsyncParsableCommand {
 
   @Flag(
     name: [.customShort("v"), .long],
-    help: "Print additional diagnostics and prompt budgeting details.")
+    help: "Print additional diagnostics and prompt budgeting details (overrides --quiet)."
+  )
   var verbose: Bool = false
+
+  @Flag(
+    name: [.customShort("q"), .long],
+    help: "Suppress routine info output (warnings/errors still shown). Ignored if --verbose is set."
+  )
+  var quiet: Bool = false
 
   func run() async throws {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
@@ -51,13 +58,15 @@ struct GenerateCommand: AsyncParsableCommand {
     let autoCommit = commit
     let stageChanges = autoCommit && stage
 
+    let effectiveQuiet = verbose ? false : quiet
     let options = CommitGenOptions(
       includeStagedOnly: stagedOnly,
       outputFormat: outputFormat,
       promptStyle: promptStyle,
       autoCommit: autoCommit,
       stageChanges: stageChanges,
-      isVerbose: verbose
+      isVerbose: verbose,
+      isQuiet: effectiveQuiet
     )
 
     let tool = CommitGenTool(options: options)

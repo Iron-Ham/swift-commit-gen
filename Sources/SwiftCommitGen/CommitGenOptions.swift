@@ -29,4 +29,5 @@ struct CommitGenOptions {
   var autoCommit: Bool
   var stageChanges: Bool
   var isVerbose: Bool
+  var isQuiet: Bool
 }
