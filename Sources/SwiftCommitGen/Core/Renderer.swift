@@ -4,7 +4,7 @@ protocol Renderer {
   func render(
     _ draft: CommitDraft,
     format: CommitGenOptions.OutputFormat,
-    diagnostics: PromptDiagnostics?
+    report: GenerationReport?
   )
 }
 
@@ -18,7 +18,7 @@ struct ConsoleRenderer: Renderer {
   func render(
     _ draft: CommitDraft,
     format: CommitGenOptions.OutputFormat,
-    diagnostics: PromptDiagnostics?
+    report: GenerationReport?
   ) {
     switch format {
     case .text:
@@ -34,7 +34,11 @@ struct ConsoleRenderer: Renderer {
     case .json:
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      let payload = CommitGenerationOutput(commit: draft, diagnostics: diagnostics)
+      let payload = CommitGenerationOutput(
+        commit: draft,
+        report: report,
+        diagnostics: report?.finalPromptDiagnostics
+      )
       if let data = try? encoder.encode(payload),
         let output = String(data: data, encoding: .utf8)
       {
@@ -46,5 +50,6 @@ struct ConsoleRenderer: Renderer {
 
 private struct CommitGenerationOutput: Encodable {
   var commit: CommitDraft
+  var report: GenerationReport?
   var diagnostics: PromptDiagnostics?
 }

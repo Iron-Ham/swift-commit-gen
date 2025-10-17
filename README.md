@@ -67,12 +67,3 @@ Key options:
 - `--commit`: automatically run `git commit` after you accept the draft (combine with `--stage` to add unstaged files first).
 
 Pass `--help` to list all available flags.
-
-Roadmap
--------
-- [x] Implement Git status inspection and change summarization utilities
-- [x] Integrate with Apple's Intelligence framework for local inference
-- [x] Provide interactive terminal UI for accepting/editing generated messages
-- [ ] Add configuration options (prompt templates, verbosity, output format)
-- [ ] Document testing strategy and add automated tests
-- [ ] Reintroduce `--dry-run` and add prompt batching for massive diffs

@@ -59,6 +59,7 @@ struct PromptDiagnostics: Codable, Sendable {
     var isGenerated: Bool
     var isBinary: Bool
     var snippetTruncated: Bool
+    var usedFullSnippet: Bool
   }
 
   var estimatedLineCount: Int
@@ -528,7 +529,8 @@ private func makeDiagnostics(
       tokenEstimate: tokenEstimate,
       isGenerated: file.isGenerated,
       isBinary: file.isBinary,
-      snippetTruncated: file.snippetTruncated
+      snippetTruncated: file.snippetTruncated,
+      usedFullSnippet: file.snippetMode == .full
     )
   }
 

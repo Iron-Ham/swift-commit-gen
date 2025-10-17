@@ -3,6 +3,11 @@ import FoundationModels
 
 struct ChangeSummary: Hashable, Codable, PromptRepresentable {
   struct FileSummary: Hashable, Codable, PromptRepresentable {
+    enum SnippetMode: String, Codable {
+      case compact
+      case full
+    }
+
     var path: String
     var oldPath: String?
     var kind: GitChangeKind
@@ -10,6 +15,9 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     var additions: Int
     var deletions: Int
     var snippet: [String]
+    var compactSnippet: [String]
+    var fullSnippet: [String]
+    var snippetMode: SnippetMode
     var snippetTruncated: Bool
     var isBinary: Bool
     var diffLineCount: Int
@@ -148,6 +156,24 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
 
       return lines
     }
+
+    func withSnippetMode(_ mode: SnippetMode) -> FileSummary {
+      var copy = self
+      copy.applySnippetMode(mode)
+      return copy
+    }
+
+    mutating func applySnippetMode(_ mode: SnippetMode) {
+      let wasTruncated = snippetTruncated
+      snippetMode = mode
+      switch mode {
+      case .compact:
+        snippet = compactSnippet
+      case .full:
+        snippet = fullSnippet
+      }
+      snippetTruncated = wasTruncated || diffLineCount > snippet.count
+    }
   }
 
   var files: [FileSummary]
@@ -200,10 +226,12 @@ protocol DiffSummarizer {
 struct DefaultDiffSummarizer: DiffSummarizer {
   private let gitClient: GitClient
   private let maxLinesPerFile: Int
+  private let maxFullLinesPerFile: Int
 
-  init(gitClient: GitClient, maxLinesPerFile: Int = 80) {
+  init(gitClient: GitClient, maxLinesPerFile: Int = 80, maxFullLinesPerFile: Int = 200) {
     self.gitClient = gitClient
     self.maxLinesPerFile = maxLinesPerFile
+    self.maxFullLinesPerFile = max(maxLinesPerFile, maxFullLinesPerFile)
   }
 
   func summarize(status: GitStatus, includeStagedOnly: Bool) async throws -> ChangeSummary {
@@ -244,10 +272,11 @@ struct DefaultDiffSummarizer: DiffSummarizer {
 
       let additions = diffInfo?.additions ?? 0
       let deletions = diffInfo?.deletions ?? 0
-      let snippet = diffInfo?.snippet ?? defaultSnippet(for: change)
+      let compactSnippet = diffInfo?.compactSnippet ?? defaultSnippet(for: change)
+      let fullSnippet = diffInfo?.fullSnippet ?? compactSnippet
       let snippetTruncated = diffInfo?.isTruncated ?? false
       let isBinary = diffInfo?.isBinary ?? false
-      let lineCount = diffInfo?.lineCount ?? snippet.count
+      let lineCount = diffInfo?.lineCount ?? compactSnippet.count
       let hasHunks = diffInfo?.hasHunks ?? false
 
       let isGenerated =
@@ -255,15 +284,19 @@ struct DefaultDiffSummarizer: DiffSummarizer {
         ?? change.oldPath.flatMap { generatedLookup[$0] }
         ?? false
 
-      var adjustedSnippet = snippet
+      var adjustedCompactSnippet = compactSnippet
+      var adjustedFullSnippet = fullSnippet
       var adjustedTruncation = snippetTruncated
       if isGenerated {
-        adjustedSnippet = []
+        adjustedCompactSnippet = []
+        adjustedFullSnippet = []
         adjustedTruncation = true
       }
 
-      let limitedSnippet = Array(adjustedSnippet.prefix(maxLinesPerFile))
-      let truncatedByLimit = adjustedSnippet.count > maxLinesPerFile
+      let limitedCompactSnippet = Array(adjustedCompactSnippet.prefix(maxLinesPerFile))
+      let truncatedByLimit = adjustedCompactSnippet.count > maxLinesPerFile
+      let limitedFullSnippet = Array(adjustedFullSnippet.prefix(maxFullLinesPerFile))
+      let truncatedFullByLimit = adjustedFullSnippet.count > maxFullLinesPerFile
 
       let summary = ChangeSummary.FileSummary(
         path: change.path,
@@ -272,14 +305,23 @@ struct DefaultDiffSummarizer: DiffSummarizer {
         location: change.location,
         additions: additions,
         deletions: deletions,
-        snippet: limitedSnippet,
+        snippet: limitedCompactSnippet,
+        compactSnippet: limitedCompactSnippet,
+        fullSnippet: limitedFullSnippet,
+        snippetMode: .compact,
         snippetTruncated: adjustedTruncation || truncatedByLimit,
         isBinary: isBinary,
         diffLineCount: lineCount,
         diffHasHunks: hasHunks,
         isGenerated: isGenerated
       )
-      summaries.append(summary)
+      var mutableSummary = summary
+      if truncatedFullByLimit {
+        // ensure flags remain accurate if even the expanded snippet is limited
+        mutableSummary.snippetTruncated = true
+      }
+      mutableSummary.applySnippetMode(ChangeSummary.FileSummary.SnippetMode.compact)
+      summaries.append(mutableSummary)
     }
 
     return ChangeSummary(files: summaries)
@@ -306,7 +348,8 @@ struct DefaultDiffSummarizer: DiffSummarizer {
     var oldPath: String?
     var additions: Int
     var deletions: Int
-    var snippet: [String]
+    var compactSnippet: [String]
+    var fullSnippet: [String]
     var lineCount: Int
     var isTruncated: Bool
     var isBinary: Bool
@@ -343,15 +386,21 @@ struct DefaultDiffSummarizer: DiffSummarizer {
         let lowercased = line.lowercased()
         return lowercased.hasPrefix("binary files ") || lowercased == "binary files differ"
       }
-      let snippet = Array(currentLines.prefix(maxLinesPerFile)).map { String($0.prefix(160)) }
-      let isTruncated = lineCount > maxLinesPerFile
+      let compactSnippet = Array(currentLines.prefix(maxLinesPerFile)).map {
+        String($0.prefix(160))
+      }
+      let fullSnippet = Array(currentLines.prefix(maxFullLinesPerFile)).map {
+        String($0.prefix(160))
+      }
+      let isTruncated = lineCount > maxFullLinesPerFile
 
       let parsed = ParsedDiff(
         path: stripDiffPrefix(targetPath),
         oldPath: cleanOldPath(currentOldPath),
         additions: additions,
         deletions: deletions,
-        snippet: snippet,
+        compactSnippet: compactSnippet,
+        fullSnippet: fullSnippet,
         lineCount: lineCount,
         isTruncated: isTruncated,
         isBinary: isBinary,

@@ -60,23 +60,53 @@ struct CommitGenTool {
       includeUnstagedChanges: !options.includeStagedOnly
     )
 
-    let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
-    if options.isVerbose {
-      logPromptDiagnostics(promptPackage.diagnostics)
-    }
-
     if options.outputFormat == .text {
       renderReviewSummary(summary)
     }
 
-    logger.info("Requesting commit draft from the on-device language model…")
-    let generation = try await llmClient.generateCommitDraft(from: promptPackage)
-    if options.isVerbose {
-      logPromptDiagnostics(generation.diagnostics)
+    let planner = PromptBatchPlanner()
+    let batches = planner.planBatches(for: summary)
+    let useBatching = shouldUseBatching(for: batches)
+
+    let outcome: GenerationOutcome
+    if useBatching {
+      outcome = try await generateBatchedDraft(
+        batches: batches,
+        metadata: metadata,
+        fullSummary: summary
+      )
+    } else {
+      outcome = try await generateSingleDraft(summary: summary, metadata: metadata)
     }
 
-    var draft = generation.draft
-    renderer.render(draft, format: options.outputFormat, diagnostics: generation.diagnostics)
+    var draft = outcome.draft
+    renderer.render(draft, format: options.outputFormat, report: outcome.report)
+
+    if options.isVerbose, let report = outcome.report, report.mode == .batched {
+      for info in report.batches {
+        let tokenUsage =
+          info.promptDiagnostics.actualTotalTokenCount
+          ?? info.promptDiagnostics.estimatedTokenCount
+        let subjectPreview =
+          info.draft.subject.isEmpty
+          ? "(empty)"
+          : info.draft.subject
+        let samplePaths = info.filePaths.prefix(3)
+        let pathPreview: String
+        if samplePaths.isEmpty {
+          pathPreview = "no files tracked"
+        } else if samplePaths.count == info.fileCount {
+          pathPreview = samplePaths.joined(separator: ", ")
+        } else {
+          pathPreview =
+            samplePaths.joined(separator: ", ")
+            + " +\(info.fileCount - samplePaths.count) more"
+        }
+        logger.info(
+          "Batch \(info.index + 1): \(info.fileCount) file(s), ~\(tokenUsage) tokens, subject: \(subjectPreview). Files: \(pathPreview)."
+        )
+      }
+    }
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
@@ -90,8 +120,8 @@ struct CommitGenTool {
       initialDraft: draft,
       regenerate: { additionalContext in
         let package =
-          additionalContext.map { promptPackage.appendingUserContext($0) }
-          ?? promptPackage
+          additionalContext.map { outcome.promptPackage.appendingUserContext($0) }
+          ?? outcome.promptPackage
         if options.isVerbose {
           logPromptDiagnostics(package.diagnostics)
         }
@@ -145,12 +175,12 @@ struct CommitGenTool {
       case "e", "edit":
         if let updated = try editDraft(currentDraft) {
           currentDraft = updated
-          renderer.render(currentDraft, format: .text, diagnostics: nil)
+          renderer.render(currentDraft, format: .text, report: nil)
         }
       case "r", "regen", "regenerate":
         logger.info("Requesting a new commit draft from the on-device language model…")
         currentDraft = try await regenerate(nil)
-        renderer.render(currentDraft, format: .text, diagnostics: nil)
+        renderer.render(currentDraft, format: .text, report: nil)
       case "c", "context":
         guard let additionalContext = promptForAdditionalContext() else {
           logger.warning("No additional context provided; keeping previous draft.")
@@ -158,7 +188,7 @@ struct CommitGenTool {
         }
         logger.info("Requesting a new commit draft with user context…")
         currentDraft = try await regenerate(additionalContext)
-        renderer.render(currentDraft, format: .text, diagnostics: nil)
+        renderer.render(currentDraft, format: .text, report: nil)
       case "n", "no", "q", "quit":
         break reviewLoop
       default:
@@ -368,6 +398,9 @@ struct CommitGenTool {
         if usage.snippetTruncated {
           descriptors.append("trimmed")
         }
+        if usage.usedFullSnippet {
+          descriptors.append("full snippet")
+        }
         let descriptorText: String
         if descriptors.isEmpty {
           descriptorText = ""
@@ -410,5 +443,141 @@ struct CommitGenTool {
     }
 
     try await gitClient.stage(paths: Array(paths).sorted())
+  }
+}
+
+extension CommitGenTool {
+  fileprivate struct GenerationOutcome {
+    var draft: CommitDraft
+    var promptPackage: PromptPackage
+    var diagnostics: PromptDiagnostics
+    var report: GenerationReport?
+  }
+
+  fileprivate func shouldUseBatching(for batches: [PromptBatch]) -> Bool {
+    guard !batches.isEmpty else { return false }
+    if batches.count > 1 {
+      return true
+    }
+    return batches.first?.exceedsBudget ?? false
+  }
+
+  fileprivate func generateSingleDraft(
+    summary: ChangeSummary, metadata: PromptMetadata
+  ) async throws -> GenerationOutcome {
+    let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
+    if options.isVerbose {
+      logPromptDiagnostics(promptPackage.diagnostics)
+    }
+
+    logger.info("Requesting commit draft from the on-device language model…")
+    let generation = try await llmClient.generateCommitDraft(from: promptPackage)
+    if options.isVerbose {
+      logPromptDiagnostics(generation.diagnostics)
+    }
+
+    return GenerationOutcome(
+      draft: generation.draft,
+      promptPackage: promptPackage,
+      diagnostics: generation.diagnostics,
+      report: GenerationReport(
+        mode: .single,
+        finalPromptDiagnostics: generation.diagnostics,
+        batches: []
+      )
+    )
+  }
+
+  fileprivate func generateBatchedDraft(
+    batches: [PromptBatch],
+    metadata: PromptMetadata,
+    fullSummary: ChangeSummary
+  ) async throws -> GenerationOutcome {
+    logger.info(
+      "Large change set spans \(fullSummary.fileCount) file(s); splitting into \(batches.count) prompt batch(es)."
+    )
+
+    var partialDrafts: [BatchPartialDraft] = []
+
+    for (index, batch) in batches.enumerated() {
+      let batchNumber = index + 1
+      logger.info(
+        "Batch \(batchNumber)/\(batches.count): generating draft for \(batch.files.count) file(s) (estimated ~\(batch.tokenEstimate) tokens)."
+      )
+
+      let batchSummary = ChangeSummary(files: batch.files)
+      var batchPackage = promptBuilder.makePrompt(summary: batchSummary, metadata: metadata)
+
+      let fileList = batch.files.prefix(10).map { "- \($0.path)" }.joined(separator: "\n")
+      var contextLines: [String] = [
+        "Batch \(batchNumber) of \(batches.count). Focus exclusively on these files; other batches are handled separately."
+      ]
+      if !fileList.isEmpty {
+        contextLines.append("Files in this batch:")
+        contextLines.append(fileList)
+      }
+      if batch.exceedsBudget {
+        contextLines.append(
+          "This batch still approaches the token budget; prioritize the most important changes."
+        )
+      }
+      let additionalContext = contextLines.joined(separator: "\n")
+      batchPackage = batchPackage.appendingUserContext(additionalContext)
+
+      if options.isVerbose {
+        logPromptDiagnostics(batchPackage.diagnostics)
+      }
+
+      let generation = try await llmClient.generateCommitDraft(from: batchPackage)
+      if options.isVerbose {
+        logPromptDiagnostics(generation.diagnostics)
+        logger.info("Batch \(batchNumber) partial subject: \(generation.draft.subject)")
+      }
+
+      let partial = BatchPartialDraft(
+        batchIndex: index,
+        files: batch.files,
+        draft: generation.draft,
+        diagnostics: generation.diagnostics
+      )
+      partialDrafts.append(partial)
+    }
+
+    let sortedPartials = partialDrafts.sorted { $0.batchIndex < $1.batchIndex }
+    let batchReports: [GenerationReport.BatchInfo] = sortedPartials.map { partial in
+      let batch = batches[partial.batchIndex]
+      return GenerationReport.BatchInfo(
+        index: partial.batchIndex,
+        fileCount: batch.files.count,
+        filePaths: batch.files.map { $0.path },
+        exceedsBudget: batch.exceedsBudget,
+        promptDiagnostics: partial.diagnostics,
+        draft: partial.draft
+      )
+    }
+
+    let combinationBuilder = BatchCombinationPromptBuilder()
+    let combinationPrompt = combinationBuilder.makePrompt(
+      metadata: metadata, partials: sortedPartials)
+    if options.isVerbose {
+      logPromptDiagnostics(combinationPrompt.diagnostics)
+    }
+
+    logger.info("Combining \(partialDrafts.count) partial draft(s) into a unified commit message…")
+    let combinationGeneration = try await llmClient.generateCommitDraft(from: combinationPrompt)
+    if options.isVerbose {
+      logPromptDiagnostics(combinationGeneration.diagnostics)
+    }
+
+    return GenerationOutcome(
+      draft: combinationGeneration.draft,
+      promptPackage: combinationPrompt,
+      diagnostics: combinationGeneration.diagnostics,
+      report: GenerationReport(
+        mode: .batched,
+        finalPromptDiagnostics: combinationGeneration.diagnostics,
+        batches: batchReports
+      )
+    )
   }
 }

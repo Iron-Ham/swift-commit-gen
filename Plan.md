@@ -68,7 +68,7 @@ Phase 5: FoundationModels Integration 🔄
    - ✅ Initialize model session with temperature / response limits tuned for commit messages.
    - ✅ Provide async `generateCommitDraft(summary:)` returning `CommitDraft`.
    - 🔄 Handle retries, timeouts, and richer fallback messaging when generation fails mid-flight.
-   - 🔄 Evaluate context-compaction utilities so regenerated prompts reuse summary data without re-sending unchanged sections.
+   - 🔄 Evaluate context-compaction utilities so regenerated prompts reuse summary data without re-sending unchanged sections (batch planner now reuses summaries; refine regeneration flow).
 3. ✅ Prepare graceful degradation
    - ✅ Surface actionable error message when the model is unavailable.
    - ⚪ Consider offline fallback prompt (e.g., reuse previous draft or instruct user) if model stays unavailable.
@@ -100,13 +100,14 @@ Phase 5b: Prompt Budget & Batching 🚧
       - ✅ Estimate token usage and warn when nearing the model's context window.
       - 🔄 Run periodic Foundation Models Instruments sessions to compare real prompt/completion usage against our estimates and feed adjustments back into heuristics.
    - 🔄 Analyze augmented user prompts to ensure default metadata isn’t duplicated during context regeneration.
-   - 🔄 Persist diagnostics in JSON output or verbose mode for downstream tooling.
-2. ⚪ Batching strategy
-   - 🔄 Build a `PromptBatchPlanner` that sorts files by estimated token contribution and greedily packs them into sub-prompts with ~15% safety headroom beneath the 4,096 token ceiling.
-   - ⚪ Surface per-batch diagnostics (token totals, file membership, overflow flags) alongside the existing prompt logging so we can trace which batch contains which files.
-   - ⚪ Generate partial commit drafts per batch using individual `LanguageModelSession` responses, capturing their diagnostics for later analysis.
-   - ⚪ Spin up a fresh `LanguageModelSession` to combine the partial drafts: feed repo metadata, batch summaries, and each partial commit message into a dedicated combiner prompt that produces the final subject/body.
-   - ⚪ Implement fallback behavior when the combiner prompt nears the window (e.g., summarize partial subjects first or re-run with reduced context).
+   - ✅ Persist diagnostics in JSON output or verbose mode for downstream tooling.
+2. 🔄 Batching strategy
+   - ✅ Build a `PromptBatchPlanner` that sorts files by estimated token contribution and greedily packs them into sub-prompts with ~15% safety headroom beneath the 4,096 token ceiling.
+   - ✅ Surface per-batch diagnostics (token totals, file membership, overflow flags) alongside the existing prompt logging so we can trace which batch contains which files.
+   - ✅ Generate partial commit drafts per batch using individual `LanguageModelSession` responses, capturing their diagnostics for later analysis.
+   - ✅ Spin up a fresh `LanguageModelSession` to combine the partial drafts: feed repo metadata, batch summaries, and each partial commit message into a dedicated combiner prompt that produces the final subject/body.
+   - 🔄 Implement fallback behavior when the combiner prompt nears the window (e.g., summarize partial subjects first or re-run with reduced context).
+   - ✅ Revisit snippet truncation once batching is active: allow the planner to re-expand diff snippets (up to a generous hard cap that still fits a single file per batch) when spare token budget exists, and log which files get the “full” treatment versus compacted views.
 
 Phase 7: Configuration & Persistence
 ------------------------------------

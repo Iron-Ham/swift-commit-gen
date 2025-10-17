@@ -8,6 +8,13 @@ struct PromptBatch: Sendable {
   var exceedsBudget: Bool
 }
 
+struct BatchPartialDraft: Sendable {
+  var batchIndex: Int
+  var files: [ChangeSummary.FileSummary]
+  var draft: CommitDraft
+  var diagnostics: PromptDiagnostics
+}
+
 struct PromptBatchPlanner {
   var tokenBudget: Int
   var headroomRatio: Double
@@ -24,69 +31,67 @@ struct PromptBatchPlanner {
 
     let targetBudget = max(1, Int(Double(tokenBudget) * (1.0 - headroomRatio)))
     let contributions = summary.files.map { file -> FileContribution in
-      let lines = file.promptLines()
-      let characterCount = lines.reduce(0) { partial, line in
+      let compactFile = file.withSnippetMode(.compact)
+      let compactLines = compactFile.promptLines()
+      let compactCharCount = compactLines.reduce(0) { partial, line in
         partial + line.count + 1
       }
-      let tokenEstimate = PromptDiagnostics.tokenEstimate(forCharacterCount: characterCount)
-      let fileUsage = PromptDiagnostics.FileUsage(
-        path: file.path,
-        kind: file.kind.description,
-        location: file.location,
-        lineCount: lines.count,
-        tokenEstimate: tokenEstimate,
-        isGenerated: file.isGenerated,
-        isBinary: file.isBinary,
-        snippetTruncated: file.snippetTruncated
-      )
-      return FileContribution(file: file, usage: fileUsage)
-    }.sorted { lhs, rhs in
-      if lhs.usage.tokenEstimate == rhs.usage.tokenEstimate {
-        return lhs.file.path < rhs.file.path
+      let compactTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: compactCharCount)
+
+      let fullFile = file.withSnippetMode(.full)
+      let fullLines = fullFile.promptLines()
+      let fullCharCount = fullLines.reduce(0) { partial, line in
+        partial + line.count + 1
       }
-      return lhs.usage.tokenEstimate > rhs.usage.tokenEstimate
+      let fullTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: fullCharCount)
+      let canUseFull = fullFile.snippetMode == .full && (fullTokens > 0 || !fullLines.isEmpty)
+
+      return FileContribution(
+        compactFile: compactFile,
+        fullFile: fullFile,
+        compactTokenEstimate: compactTokens,
+        fullTokenEstimate: fullTokens,
+        compactLineCount: compactLines.count,
+        fullLineCount: fullLines.count,
+        canUseFull: canUseFull
+      )
+    }.sorted { lhs, rhs in
+      if lhs.compactTokenEstimate == rhs.compactTokenEstimate {
+        return lhs.compactFile.path < rhs.compactFile.path
+      }
+      return lhs.compactTokenEstimate > rhs.compactTokenEstimate
     }
 
     var batches: [PromptBatch] = []
-    var currentFiles: [ChangeSummary.FileSummary] = []
-    var currentUsages: [PromptDiagnostics.FileUsage] = []
+    var currentContributions: [FileContribution] = []
     var currentTokenTotal = 0
-    var currentLineTotal = 0
 
     func closeCurrentBatch(force: Bool = false) {
-      guard !currentFiles.isEmpty else { return }
-      let exceeds = currentTokenTotal > targetBudget
-      let batch = PromptBatch(
-        files: currentFiles,
-        tokenEstimate: currentTokenTotal,
-        lineEstimate: currentLineTotal,
-        fileUsages: currentUsages,
-        exceedsBudget: exceeds
+      guard !currentContributions.isEmpty else { return }
+      let batch = finalizeBatch(
+        contributions: currentContributions,
+        targetBudget: targetBudget
       )
       batches.append(batch)
-      currentFiles.removeAll(keepingCapacity: !force)
-      currentUsages.removeAll(keepingCapacity: !force)
+      currentContributions.removeAll(keepingCapacity: !force)
       currentTokenTotal = 0
-      currentLineTotal = 0
     }
 
     for contribution in contributions {
-      let nextTokenTotal = currentTokenTotal + contribution.usage.tokenEstimate
+      let nextTokenTotal = currentTokenTotal + contribution.compactTokenEstimate
 
-      if !currentFiles.isEmpty && nextTokenTotal > targetBudget {
+      if !currentContributions.isEmpty && nextTokenTotal > targetBudget {
         closeCurrentBatch()
       }
 
-      currentFiles.append(contribution.file)
-      currentUsages.append(contribution.usage)
-      currentTokenTotal += contribution.usage.tokenEstimate
-      currentLineTotal += contribution.usage.lineCount
+      currentContributions.append(contribution)
+      currentTokenTotal += contribution.compactTokenEstimate
 
-      if contribution.usage.tokenEstimate > targetBudget {
+      if contribution.compactTokenEstimate > targetBudget {
         closeCurrentBatch()
       }
 
-      if currentFiles.count >= minimumBatchSize && currentTokenTotal >= targetBudget {
+      if currentContributions.count >= minimumBatchSize && currentTokenTotal >= targetBudget {
         closeCurrentBatch()
       }
     }
@@ -97,7 +102,116 @@ struct PromptBatchPlanner {
   }
 
   private struct FileContribution {
-    var file: ChangeSummary.FileSummary
-    var usage: PromptDiagnostics.FileUsage
+    var compactFile: ChangeSummary.FileSummary
+    var fullFile: ChangeSummary.FileSummary
+    var compactTokenEstimate: Int
+    var fullTokenEstimate: Int
+    var compactLineCount: Int
+    var fullLineCount: Int
+    var canUseFull: Bool
+  }
+
+  private func finalizeBatch(
+    contributions: [FileContribution],
+    targetBudget: Int
+  ) -> PromptBatch {
+    var useFull = Array(repeating: false, count: contributions.count)
+
+    for (index, contribution) in contributions.enumerated() where contribution.canUseFull {
+      let delta = contribution.fullTokenEstimate - contribution.compactTokenEstimate
+      if delta <= 0 {
+        useFull[index] = true
+      }
+    }
+
+    var totalTokens = totalTokens(for: contributions, useFull: useFull)
+    var totalLines = totalLines(for: contributions, useFull: useFull)
+
+    var candidates: [(index: Int, delta: Int)] = []
+    for (index, contribution) in contributions.enumerated() where contribution.canUseFull {
+      let delta = contribution.fullTokenEstimate - contribution.compactTokenEstimate
+      if delta > 0 {
+        candidates.append((index, delta))
+      }
+    }
+
+    candidates.sort { lhs, rhs in
+      if lhs.delta == rhs.delta {
+        return lhs.index < rhs.index
+      }
+      return lhs.delta < rhs.delta
+    }
+
+    for candidate in candidates where !useFull[candidate.index] {
+      let potentialTotal = totalTokens + candidate.delta
+      if potentialTotal <= tokenBudget {
+        useFull[candidate.index] = true
+        totalTokens = potentialTotal
+        totalLines +=
+          contributions[candidate.index].fullLineCount
+          - contributions[candidate.index].compactLineCount
+      }
+    }
+
+    var files: [ChangeSummary.FileSummary] = []
+    var usages: [PromptDiagnostics.FileUsage] = []
+    totalTokens = 0
+    totalLines = 0
+
+    for (index, contribution) in contributions.enumerated() {
+      let file = useFull[index] ? contribution.fullFile : contribution.compactFile
+      files.append(file)
+      let lines = file.promptLines()
+      let characterCount = lines.reduce(0) { partial, line in
+        partial + line.count + 1
+      }
+      let tokenEstimate = PromptDiagnostics.tokenEstimate(forCharacterCount: characterCount)
+      totalTokens += tokenEstimate
+      totalLines += lines.count
+      usages.append(
+        PromptDiagnostics.FileUsage(
+          path: file.path,
+          kind: file.kind.description,
+          location: file.location,
+          lineCount: lines.count,
+          tokenEstimate: tokenEstimate,
+          isGenerated: file.isGenerated,
+          isBinary: file.isBinary,
+          snippetTruncated: file.snippetTruncated,
+          usedFullSnippet: file.snippetMode == .full
+        )
+      )
+    }
+
+    let exceeds = totalTokens > targetBudget
+    return PromptBatch(
+      files: files,
+      tokenEstimate: totalTokens,
+      lineEstimate: totalLines,
+      fileUsages: usages,
+      exceedsBudget: exceeds
+    )
+  }
+
+  private func totalTokens(
+    for contributions: [FileContribution],
+    useFull: [Bool]
+  ) -> Int {
+    var total = 0
+    for (index, contribution) in contributions.enumerated() {
+      total += useFull[index] ? contribution.fullTokenEstimate : contribution.compactTokenEstimate
+    }
+    return total
+  }
+
+  private func totalLines(
+    for contributions: [FileContribution],
+    useFull: [Bool]
+  ) -> Int {
+    var total = 0
+    for (index, contribution) in contributions.enumerated() {
+      total += useFull[index] ? contribution.fullLineCount : contribution.compactLineCount
+    }
+    return total
   }
 }
