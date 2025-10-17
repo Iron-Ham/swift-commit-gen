@@ -3,6 +3,8 @@ SwiftCommitGen
 
 SwiftCommitGen is a Swift-based command line tool that inspects your current Git repository, summarizes the staged and unstaged changes, and generates a commit message proposal with Apple's on-device generative model. The goal is to keep human-in-the-loop Git commits fast, consistent, and privacy-preserving by relying on system-provided AI capabilities instead of cloud services.
 
+https://github.com/user-attachments/assets/499e7b11-86af-490f-bb4e-c49c65c58ecf
+
 Features
 --------
 - Detects dirty Git worktrees and extracts concise change context
