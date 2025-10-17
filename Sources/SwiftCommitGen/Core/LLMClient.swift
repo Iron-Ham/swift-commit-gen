@@ -144,17 +144,17 @@ struct FoundationModelsClient: LLMClient {
   private func availabilityDescription(_ availability: SystemLanguageModel.Availability) -> String {
     switch availability {
     case .available:
-      return ""
+      ""
     case .unavailable(let reason):
       switch reason {
       case .appleIntelligenceNotEnabled:
-        return "Apple Intelligence is turned off in Settings"
+        "Apple Intelligence is turned off in Settings"
       case .deviceNotEligible:
-        return "this device does not support Apple Intelligence"
+        "this device does not support Apple Intelligence"
       case .modelNotReady:
-        return "the model is still preparing; try again later"
+        "the model is still preparing; try again later"
       @unknown default:
-        return String(describing: reason)
+        String(describing: reason)
       }
     }
   }
@@ -211,11 +211,11 @@ struct FoundationModelsClient: LLMClient {
     segments.compactMap { segment in
       switch segment {
       case .text(let text):
-        return text.content
+        text.content
       case .structure(let structured):
-        return structured.content.jsonString
+        structured.content.jsonString
       @unknown default:
-        return nil
+        nil
       }
     }
   }

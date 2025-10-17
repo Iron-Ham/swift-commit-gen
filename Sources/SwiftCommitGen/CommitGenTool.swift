@@ -142,11 +142,11 @@ struct CommitGenTool {
   private func describe(scope: GitChangeScope) -> String {
     switch scope {
     case .staged:
-      return "staged"
+      "staged"
     case .unstaged:
-      return "unstaged"
+      "unstaged"
     case .all:
-      return "staged + unstaged"
+      "staged + unstaged"
     }
   }
 

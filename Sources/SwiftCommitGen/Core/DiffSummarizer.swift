@@ -39,11 +39,11 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     private var locationLabel: String {
       switch location {
       case .staged:
-        return "(staged)"
+        "(staged)"
       case .unstaged:
-        return "(unstaged)"
+        "(unstaged)"
       case .untracked:
-        return "(untracked)"
+        "(untracked)"
       }
     }
 
@@ -77,11 +77,11 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     }
 
     private var shouldRenderSnippet: Bool {
-      guard !isBinary else { return false }
-      guard !isGenerated else { return false }
-      guard !diffIsLarge else { return false }
-      guard !snippet.isEmpty else { return false }
-      return true
+      if isBinary || isGenerated || diffIsLarge || snippet.isEmpty {
+        false
+      } else {
+        true
+      }
     }
 
     private var hasExplicitNote: Bool {

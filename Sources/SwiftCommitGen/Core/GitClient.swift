@@ -26,23 +26,23 @@ enum GitChangeKind: String, Hashable, Codable {
   var description: String {
     switch self {
     case .added:
-      return "added"
+      "added"
     case .modified:
-      return "modified"
+      "modified"
     case .deleted:
-      return "deleted"
+      "deleted"
     case .renamed:
-      return "renamed"
+      "renamed"
     case .copied:
-      return "copied"
+      "copied"
     case .typeChange:
-      return "type change"
+      "type change"
     case .unmerged:
-      return "unmerged"
+      "unmerged"
     case .untracked:
-      return "untracked"
+      "untracked"
     case .unknown:
-      return "unknown"
+      "unknown"
     }
   }
 
@@ -78,9 +78,10 @@ struct GitFileChange {
 
   var displayPath: String {
     if let oldPath {
-      return "\(oldPath) -> \(path)"
+      "\(oldPath) -> \(path)"
+    } else {
+      path
     }
-    return path
   }
 
   var summary: String {
@@ -100,11 +101,11 @@ struct GitStatus {
   func changes(for scope: GitChangeScope) -> [GitFileChange] {
     switch scope {
     case .staged:
-      return staged
+      staged
     case .unstaged:
-      return unstaged
+      unstaged
     case .all:
-      return staged + unstaged + untracked
+      staged + unstaged + untracked
     }
   }
 }

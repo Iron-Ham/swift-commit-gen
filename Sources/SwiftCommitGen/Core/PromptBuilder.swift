@@ -632,10 +632,10 @@ private func estimateTokenCount(
 private func locationDescription(_ location: GitChangeLocation) -> String {
   switch location {
   case .staged:
-    return "staged"
+    "staged"
   case .unstaged:
-    return "unstaged"
+    "unstaged"
   case .untracked:
-    return "untracked"
+    "untracked"
   }
 }
