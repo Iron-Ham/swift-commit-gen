@@ -12,7 +12,7 @@ Features
 
 Project Status
 --------------
-The CLI currently supports end-to-end commit generation, including Git inspection, AI-assisted drafting, interactive editing, and optional auto-staging/committing. Configuration files, advanced batching for huge diffs, and a restored `--dry-run` mode remain on the roadmap.
+The CLI currently supports end-to-end commit generation, including Git inspection, AI-assisted drafting, interactive editing, and optional auto-staging/committing. Configuration files and advanced batching for huge diffs remain on the roadmap.
 
 Prerequisites
 -------------
