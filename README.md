@@ -90,13 +90,13 @@ You can invoke the tool either with the explicit `generate` subcommand or omit i
 
 Primary (shorter) form:
 
-```
+```sh
 swiftcommitgen [OPTIONS]
 ```
 
 Equivalent explicit form:
 
-```
+```sh
 swiftcommitgen generate [OPTIONS]
 ```
 
@@ -135,31 +135,31 @@ Precedence: `--verbose` > `--quiet`. Supplying both yields verbose output.
 
 Generate and interactively accept a draft (default):
 
-```
+```sh
 swiftcommitgen
 ```
 
 Limit to staged changes and auto-commit:
 
-```
+```sh
 swiftcommitgen --staged-only --commit
 ```
 
 Show detailed diagnostics while still auto-committing unstaged files:
 
-```
+```sh
 swiftcommitgen --verbose --commit --stage
 ```
 
 Minimal essential output (quiet mode) but still commit:
 
-```
+```sh
 swiftcommitgen --quiet --commit
 ```
 
 Produce machine-readable JSON (no interactive loop):
 
-```
+```sh
 swiftcommitgen --format json
 ```
 
@@ -167,12 +167,12 @@ swiftcommitgen --format json
 
 For a full list of commands:
 
-```
+```sh
 swiftcommitgen help # or swiftcommitgen -h
 ```
 
 For help with a specific command, such as `generate`:
 
-```
+```sh
 swiftcommitgen help generate # or swiftcommitgen generate -h
 ```
