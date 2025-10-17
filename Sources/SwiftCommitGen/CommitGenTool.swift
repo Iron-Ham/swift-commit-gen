@@ -140,16 +140,16 @@ struct CommitGenTool {
         }
       case "r", "regen", "regenerate":
         logger.info("Requesting a new commit draft from the on-device language model…")
-    currentDraft = try await regenerate(nil)
-    renderer.render(currentDraft, format: .text, diagnostics: nil)
+        currentDraft = try await regenerate(nil)
+        renderer.render(currentDraft, format: .text, diagnostics: nil)
       case "c", "context":
         guard let additionalContext = promptForAdditionalContext() else {
           logger.warning("No additional context provided; keeping previous draft.")
           continue
         }
         logger.info("Requesting a new commit draft with user context…")
-    currentDraft = try await regenerate(additionalContext)
-    renderer.render(currentDraft, format: .text, diagnostics: nil)
+        currentDraft = try await regenerate(additionalContext)
+        renderer.render(currentDraft, format: .text, diagnostics: nil)
       case "n", "no", "q", "quit":
         break reviewLoop
       default:
@@ -342,7 +342,8 @@ struct CommitGenTool {
     }
 
     if diagnostics.remainderCount > 0 {
-      var remainderSummary = "Remaining \(diagnostics.remainderCount) file(s) contribute +\(diagnostics.remainderAdditions) / -\(diagnostics.remainderDeletions)"
+      var remainderSummary =
+        "Remaining \(diagnostics.remainderCount) file(s) contribute +\(diagnostics.remainderAdditions) / -\(diagnostics.remainderDeletions)"
       if diagnostics.remainderGeneratedCount > 0 {
         remainderSummary += " (\(diagnostics.remainderGeneratedCount) generated)"
       }

@@ -132,7 +132,8 @@ struct PromptPackage {
     }
 
     var updatedDiagnostics = diagnostics
-    let additionalCharacters = trimmed.count
+    let additionalCharacters =
+      trimmed.count
       + "Additional context from user:".count
     let newlineCharacters = additionalLines  // account for line breaks
     updatedDiagnostics.recordAdditionalUserContext(
@@ -252,7 +253,8 @@ struct DefaultPromptBuilder: PromptBuilder {
       )
     }
 
-    let finalCompaction = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+    let finalCompaction =
+      displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
     let diagnostics = makeDiagnostics(
       metadata: metadata,
@@ -550,7 +552,8 @@ private func estimateTokenCount(
   )
 
   if isCompacted {
-    addLine("Context trimmed to stay within the model window; prioritize the most impactful changes.")
+    addLine(
+      "Context trimmed to stay within the model window; prioritize the most impactful changes.")
   }
 
   if remainder.count > 0 {
@@ -589,7 +592,8 @@ private func estimateTokenCount(
 
   let approximateCharactersPerToken = 4
   guard characterCount > 0 else { return 0 }
-  return max(1, (characterCount + (approximateCharactersPerToken - 1)) / approximateCharactersPerToken)
+  return max(
+    1, (characterCount + (approximateCharactersPerToken - 1)) / approximateCharactersPerToken)
 }
 
 private func locationDescription(_ location: GitChangeLocation) -> String {

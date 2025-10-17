@@ -40,14 +40,16 @@ struct GenerateCommand: AsyncParsableCommand {
   )
   var stage: Bool = true
 
-  @Flag(name: [.customShort("v"), .long], help: "Print additional diagnostics and prompt budgeting details.")
+  @Flag(
+    name: [.customShort("v"), .long],
+    help: "Print additional diagnostics and prompt budgeting details.")
   var verbose: Bool = false
 
   func run() async throws {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
     let promptStyle = CommitGenOptions.PromptStyle(rawValue: style.rawValue) ?? .summary
-  let autoCommit = commit
-  let stageChanges = autoCommit && stage
+    let autoCommit = commit
+    let stageChanges = autoCommit && stage
 
     let options = CommitGenOptions(
       includeStagedOnly: stagedOnly,
