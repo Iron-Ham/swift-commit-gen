@@ -2,7 +2,7 @@ import Foundation
 import FoundationModels
 
 protocol LLMClient {
-  func generateCommitDraft(from prompt: PromptPackage) async throws -> CommitDraft
+  func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult
 }
 
 @Generable(description: "A commit for changes made in a git repository.")
@@ -62,6 +62,11 @@ struct CommitDraft: Hashable, Codable, Sendable {
   }
 }
 
+struct LLMGenerationResult: Sendable {
+  var draft: CommitDraft
+  var diagnostics: PromptDiagnostics
+}
+
 struct FoundationModelsClient: LLMClient {
   struct Configuration {
     var maxAttempts: Int
@@ -93,7 +98,7 @@ struct FoundationModelsClient: LLMClient {
     self.modelProvider = modelProvider
   }
 
-  func generateCommitDraft(from prompt: PromptPackage) async throws -> CommitDraft {
+  func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult {
     let model = modelProvider()
 
     guard case .available = model.availability else {
@@ -106,13 +111,34 @@ struct FoundationModelsClient: LLMClient {
       instructions: prompt.systemPrompt
     )
 
+    var diagnostics = prompt.diagnostics
     let response = try await session.respond(
       generating: CommitDraft.self, options: generationOptions
     ) {
       prompt.userPrompt
     }
 
-    return response.content
+    let usage = analyzeTranscriptEntries(response.transcriptEntries)
+    let promptTokens = usage.promptTokens
+    let outputTokens = usage.outputTokens
+    let totalTokens: Int?
+    if let promptTokens, let outputTokens {
+      totalTokens = promptTokens + outputTokens
+    } else if let promptTokens {
+      totalTokens = promptTokens
+    } else if let outputTokens {
+      totalTokens = outputTokens
+    } else {
+      totalTokens = nil
+    }
+
+    diagnostics.recordActualTokenUsage(
+      promptTokens: promptTokens,
+      outputTokens: outputTokens,
+      totalTokens: totalTokens
+    )
+
+    return LLMGenerationResult(draft: response.content, diagnostics: diagnostics)
   }
 
   private func availabilityDescription(_ availability: SystemLanguageModel.Availability) -> String {
@@ -129,6 +155,67 @@ struct FoundationModelsClient: LLMClient {
         return "the model is still preparing; try again later"
       @unknown default:
         return String(describing: reason)
+      }
+    }
+  }
+
+  private func analyzeTranscriptEntries(
+    _ entries: ArraySlice<FoundationModels.Transcript.Entry>
+  ) -> (promptTokens: Int?, outputTokens: Int?) {
+    var instructionSegments: [String] = []
+    var promptSegments: [String] = []
+    var responseSegments: [String] = []
+
+    for entry in entries {
+      switch entry {
+      case .instructions(let instructions):
+        instructionSegments.append(contentsOf: textSegments(from: instructions.segments))
+      case .prompt(let prompt):
+        promptSegments.append(contentsOf: textSegments(from: prompt.segments))
+      case .response(let response):
+        responseSegments.append(contentsOf: textSegments(from: response.segments))
+      default:
+        continue
+      }
+    }
+
+    let hasPromptSegments = !instructionSegments.isEmpty || !promptSegments.isEmpty
+    let hasResponseSegments = !responseSegments.isEmpty
+
+    let promptTokenCount: Int?
+    if hasPromptSegments {
+      let instructionsCount = estimatedTokenCount(for: instructionSegments)
+      let userCount = estimatedTokenCount(for: promptSegments)
+      promptTokenCount = instructionsCount + userCount
+    } else {
+      promptTokenCount = nil
+    }
+
+    let responseTokenCount: Int?
+    if hasResponseSegments {
+      responseTokenCount = estimatedTokenCount(for: responseSegments)
+    } else {
+      responseTokenCount = nil
+    }
+
+    return (promptTokenCount, responseTokenCount)
+  }
+
+  private func estimatedTokenCount(for segments: [String]) -> Int {
+    guard !segments.isEmpty else { return 0 }
+    let combined = segments.joined(separator: "\n")
+    return PromptDiagnostics.tokenEstimate(forCharacterCount: combined.count)
+  }
+
+  private func textSegments(from segments: [FoundationModels.Transcript.Segment]) -> [String] {
+    segments.compactMap { segment in
+      switch segment {
+      case .text(let text):
+        return text.content
+      case .structure(let structured):
+        return structured.content.jsonString
+      @unknown default:
+        return nil
       }
     }
   }

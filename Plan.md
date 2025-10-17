@@ -12,8 +12,9 @@ Current Focus (October 2025)
 ----------------------------
 - Validate prompt augmentation so each regeneration carries forward only the necessary context.
 - Track how much summary data we resend to the model and prune redundant payloads to stay within small context windows.
-- Surface prompt-budget diagnostics so we can tune heuristics with real usage data.
- - Surface prompt-budget diagnostics so we can tune heuristics with real usage data (include token estimates + warnings).
+- Surface prompt-budget diagnostics so we can tune heuristics with real usage data (include token estimates + warnings).
+- Capture insights from TN3193: treat 4,096 tokens as the working ceiling, plan for multi-session strategies, and log when heuristics get close so we can react before `exceededContextWindowSize` fires.
+- Document how to validate token budgets using the Foundation Models Instruments profile run; bake those steps into our manual verification checklist.
 - Prepare heuristics to merge user-supplied annotations with existing prompts without duplicating repo metadata.
 
 Phase 1: Project Foundations ✅
@@ -85,6 +86,7 @@ Phase 6: CLI Experience 🔄
    - ✅ Provide `r` (regenerate) and `c` (regenerate with context) options, reusing the current prompt package.
    - ✅ Add ANSI theming so logs and summaries highlight paths, additions, deletions, and metadata.
    - ✅ Add `--verbose` to opt into additional diagnostics and prompt-budget reporting.
+   - 🔄 Catch `LanguageModelSession.GenerationError.exceededContextWindowSize`, warn the user, and retry with a trimmed prompt or fresh session snapshot.
 3. ✅ Add `--print-json` for tooling integration (via `--format json`).
 
 Phase 5b: Prompt Budget & Batching 🚧
@@ -96,6 +98,7 @@ Phase 5b: Prompt Budget & Batching 🚧
    - ✅ Log prompt diagnostics (line usage, truncation, generated omissions, representative hints) for every generation.
    - ✅ Tune per-file thresholds and truncation messaging for high-volume repositories.
       - ✅ Estimate token usage and warn when nearing the model's context window.
+      - 🔄 Run periodic Foundation Models Instruments sessions to compare real prompt/completion usage against our estimates and feed adjustments back into heuristics.
    - 🔄 Analyze augmented user prompts to ensure default metadata isn’t duplicated during context regeneration.
    - 🔄 Persist diagnostics in JSON output or verbose mode for downstream tooling.
 2. ⚪ Batching strategy

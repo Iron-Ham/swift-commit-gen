@@ -102,7 +102,7 @@ struct PromptDiagnostics: Codable, Sendable {
     actualTotalTokenCount = totalTokens
   }
 
-  private static func tokenEstimate(forCharacterCount count: Int) -> Int {
+  static func tokenEstimate(forCharacterCount count: Int) -> Int {
     guard count > 0 else { return 0 }
     let approximateCharactersPerToken = 4
     return max(1, (count + (approximateCharactersPerToken - 1)) / approximateCharactersPerToken)

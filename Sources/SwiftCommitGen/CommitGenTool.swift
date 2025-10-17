@@ -70,8 +70,13 @@ struct CommitGenTool {
     }
 
     logger.info("Requesting commit draft from the on-device language model…")
-    var draft = try await llmClient.generateCommitDraft(from: promptPackage)
-    renderer.render(draft, format: options.outputFormat, diagnostics: promptPackage.diagnostics)
+    let generation = try await llmClient.generateCommitDraft(from: promptPackage)
+    if options.isVerbose {
+      logPromptDiagnostics(generation.diagnostics)
+    }
+
+    var draft = generation.draft
+    renderer.render(draft, format: options.outputFormat, diagnostics: generation.diagnostics)
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
@@ -90,7 +95,11 @@ struct CommitGenTool {
         if options.isVerbose {
           logPromptDiagnostics(package.diagnostics)
         }
-        return try await llmClient.generateCommitDraft(from: package)
+        let regeneration = try await llmClient.generateCommitDraft(from: package)
+        if options.isVerbose {
+          logPromptDiagnostics(regeneration.diagnostics)
+        }
+        return regeneration.draft
       }
     ) {
       draft = reviewedDraft
