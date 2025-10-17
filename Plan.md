@@ -8,6 +8,12 @@ Guiding Principles
 - Keep user in control of the final commit message; never auto-commit without confirmation.
 - Structure code for testability (separate git plumbing, diff summarization, model prompting, CLI UX).
 
+Current Focus (October 2025)
+----------------------------
+- Validate prompt augmentation so each regeneration carries forward only the necessary context.
+- Track how much summary data we resend to the model and prune redundant payloads to stay within small context windows.
+- Prepare heuristics to merge user-supplied annotations with existing prompts without duplicating repo metadata.
+
 Phase 1: Project Foundations ✅
 ------------------------------
 1. ✅ Update `Package.swift`
@@ -58,7 +64,8 @@ Phase 5: FoundationModels Integration 🔄
 2. 🔄 Implement `LLMClient`
    - ✅ Initialize model session with temperature / response limits tuned for commit messages.
    - ✅ Provide async `generateCommitDraft(summary:)` returning `CommitDraft`.
-   - ⚪ Handle retries, timeouts, and richer fallback messaging when generation fails mid-flight.
+   - 🔄 Handle retries, timeouts, and richer fallback messaging when generation fails mid-flight.
+   - 🔄 Evaluate context-compaction utilities so regenerated prompts reuse summary data without re-sending unchanged sections.
 3. ✅ Prepare graceful degradation
    - ✅ Surface actionable error message when the model is unavailable.
    - ⚪ Consider offline fallback prompt (e.g., reuse previous draft or instruct user) if model stays unavailable.
@@ -73,6 +80,8 @@ Phase 6: CLI Experience 🔄
    - ✅ Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
    - ✅ On accept, optionally stage files (`--stage`) and run `git commit -F -` using the generated text (`--commit`).
    - ✅ Surface a summary of changes that will be committed alongside the draft.
+   - ✅ Provide `r` (regenerate) and `c` (regenerate with context) options, reusing the current prompt package.
+   - ✅ Add ANSI theming so logs and summaries highlight paths, additions, deletions, and metadata.
 3. ✅ Add `--print-json` for tooling integration (via `--format json`).
 
 Phase 5b: Prompt Budget & Batching 🚧
@@ -80,6 +89,7 @@ Phase 5b: Prompt Budget & Batching 🚧
 1. 🔄 Prompt heuristics
    - ✅ Capture large/binary diff metadata to summarize oversized changes without raw snippets.
    - 🔄 Tune per-file thresholds and truncation messaging for high-volume repositories.
+   - 🔄 Analyze augmented user prompts to ensure default metadata isn’t duplicated during context regeneration.
 2. ⚪ Batching strategy
    - ⚪ Estimate prompt token budgets and split large change sets into sequential model calls.
    - ⚪ Preserve context between batches while avoiding context-window overflow.
