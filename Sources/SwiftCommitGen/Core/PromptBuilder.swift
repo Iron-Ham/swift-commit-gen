@@ -62,6 +62,7 @@ struct DefaultPromptBuilder: PromptBuilder {
   private let minFiles: Int
   private let minSnippetLines: Int
   private let snippetReductionStep: Int
+  private let hintThreshold: Int
 
   init(
     maxFiles: Int = 12,
@@ -69,7 +70,8 @@ struct DefaultPromptBuilder: PromptBuilder {
     maxPromptLineEstimate: Int = 400,
     minFiles: Int = 3,
     minSnippetLines: Int = 0,
-    snippetReductionStep: Int = 2
+    snippetReductionStep: Int = 2,
+    hintThreshold: Int = 10
   ) {
     self.maxFiles = maxFiles
     self.maxSnippetLines = maxSnippetLines
@@ -77,6 +79,7 @@ struct DefaultPromptBuilder: PromptBuilder {
     self.minFiles = minFiles
     self.minSnippetLines = minSnippetLines
     self.snippetReductionStep = max(1, snippetReductionStep)
+    self.hintThreshold = hintThreshold
   }
 
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage {
@@ -92,13 +95,15 @@ struct DefaultPromptBuilder: PromptBuilder {
       displaySummary: displaySummary,
       fullSummary: summary,
       metadata: metadata,
-      isCompacted: isCompacted
+      isCompacted: isCompacted,
+      hintLimit: hintThreshold
     )
 
     var estimate = estimatedLineCount(
       displaySummary: displaySummary,
       fullSummary: summary,
-      includesCompactionNote: isCompacted
+      includesCompactionNote: isCompacted,
+      hintLimit: hintThreshold
     )
 
     while estimate > maxPromptLineEstimate {
@@ -124,13 +129,15 @@ struct DefaultPromptBuilder: PromptBuilder {
         displaySummary: displaySummary,
         fullSummary: summary,
         metadata: metadata,
-        isCompacted: isCompacted
+        isCompacted: isCompacted,
+        hintLimit: hintThreshold
       )
 
       estimate = estimatedLineCount(
         displaySummary: displaySummary,
         fullSummary: summary,
-        includesCompactionNote: isCompacted
+        includesCompactionNote: isCompacted,
+        hintLimit: hintThreshold
       )
     }
 
@@ -162,7 +169,8 @@ private func buildUserPrompt(
   displaySummary: ChangeSummary,
   fullSummary: ChangeSummary,
   metadata: PromptMetadata,
-  isCompacted: Bool
+  isCompacted: Bool,
+  hintLimit: Int
 ) -> Prompt {
   Prompt {
     metadata
@@ -189,6 +197,26 @@ private func buildUserPrompt(
 
       for (kind, count) in groupedByKind.prefix(4) {
         "  more: \(count) \(kind) file(s)"
+      }
+
+      let generatedCount = remainder.filter { $0.isGenerated }.count
+      if generatedCount > 0 {
+        "  note: \(generatedCount) generated file(s) omitted per .gitattributes"
+      }
+
+      let nonGeneratedRemainder = remainder.filter { !$0.isGenerated }
+      let hintCandidates = Array(nonGeneratedRemainder.prefix(hintLimit))
+      if nonGeneratedRemainder.count > hintLimit {
+        "  showing \(hintLimit) representative paths:"
+      }
+      for file in hintCandidates {
+        let descriptor = [
+          file.kind.description,
+          locationDescription(file.location),
+          file.isBinary ? "binary" : nil,
+          file.isGenerated ? "generated" : nil,
+        ].compactMap { $0 }.joined(separator: ", ")
+        "    • \(file.path) [\(descriptor)]"
       }
     }
 
@@ -223,7 +251,8 @@ private func trimSummary(
 private func estimatedLineCount(
   displaySummary: ChangeSummary,
   fullSummary: ChangeSummary,
-  includesCompactionNote: Bool
+  includesCompactionNote: Bool,
+  hintLimit: Int
 ) -> Int {
   var total = 0
 
@@ -249,6 +278,18 @@ private func estimatedLineCount(
       }
 
     total += min(4, groupedByKind.count)
+
+    let generatedCount = remainder.filter { $0.isGenerated }.count
+    if generatedCount > 0 {
+      total += 1
+    }
+
+    let nonGeneratedRemainder = remainder.filter { !$0.isGenerated }
+    let hintCandidates = Array(nonGeneratedRemainder.prefix(hintLimit))
+    if nonGeneratedRemainder.count > hintLimit {
+      total += 1
+    }
+    total += hintCandidates.count
   }
 
   for (index, file) in displaySummary.files.enumerated() {
@@ -259,4 +300,15 @@ private func estimatedLineCount(
   }
 
   return total
+}
+
+private func locationDescription(_ location: GitChangeLocation) -> String {
+  switch location {
+  case .staged:
+    return "staged"
+  case .unstaged:
+    return "unstaged"
+  case .untracked:
+    return "untracked"
+  }
 }
