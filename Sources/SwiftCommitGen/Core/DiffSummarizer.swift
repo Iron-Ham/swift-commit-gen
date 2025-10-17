@@ -41,18 +41,8 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
 
     var promptRepresentation: Prompt {
       Prompt {
-        "- \(identifier) [\(kind.description); \(scopeLabel(for: location)); +\(additions)/-\(deletions)]"
-
-        for note in detailNotes {
-          "  note: \(note)"
-        }
-
-        if shouldRenderSnippet {
-          for line in snippet {
-            "  \(line)"
-          }
-        } else if !hasExplicitNote {
-          "  note: diff omitted (summarize intent in subject/body)."
+        for line in promptLines() {
+          line
         }
       }
     }
@@ -137,6 +127,27 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
 
       return notes
     }
+
+    func promptLines() -> [String] {
+      var lines: [String] = []
+      lines.append(
+        "- \(identifier) [\(kind.description); \(scopeLabel(for: location)); +\(additions)/-\(deletions)]"
+      )
+
+      for note in detailNotes {
+        lines.append("  note: \(note)")
+      }
+
+      if shouldRenderSnippet {
+        for line in snippet {
+          lines.append("  \(line)")
+        }
+      } else if !hasExplicitNote {
+        lines.append("  note: diff omitted (summarize intent in subject/body).")
+      }
+
+      return lines
+    }
   }
 
   var files: [FileSummary]
@@ -155,17 +166,30 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
 
   var promptRepresentation: Prompt {
     Prompt {
-      "Changes:"
-
-      if files.isEmpty {
-        "- No file details captured."
-      } else {
-        for file in files {
-          file
-          ""
-        }
+      for line in promptLines() {
+        line
       }
     }
+  }
+}
+
+extension ChangeSummary {
+  func promptLines() -> [String] {
+    var lines: [String] = ["Changes:"]
+
+    if files.isEmpty {
+      lines.append("- No file details captured.")
+      return lines
+    }
+
+    for (index, file) in files.enumerated() {
+      lines.append(contentsOf: file.promptLines())
+      if index < files.count - 1 {
+        lines.append("")
+      }
+    }
+
+    return lines
   }
 }
 

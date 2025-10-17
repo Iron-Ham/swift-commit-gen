@@ -13,6 +13,7 @@ Current Focus (October 2025)
 - Validate prompt augmentation so each regeneration carries forward only the necessary context.
 - Track how much summary data we resend to the model and prune redundant payloads to stay within small context windows.
 - Surface prompt-budget diagnostics so we can tune heuristics with real usage data.
+ - Surface prompt-budget diagnostics so we can tune heuristics with real usage data (include token estimates + warnings).
 - Prepare heuristics to merge user-supplied annotations with existing prompts without duplicating repo metadata.
 
 Phase 1: Project Foundations ✅
@@ -93,7 +94,8 @@ Phase 5b: Prompt Budget & Batching 🚧
    - ✅ Add adaptive compaction that trims snippets and file counts when prompts exceed line budgets.
    - ✅ Detect files flagged as generated via `.gitattributes` (`linguist-generated`) and avoid sending their diffs.
    - ✅ Log prompt diagnostics (line usage, truncation, generated omissions, representative hints) for every generation.
-   - 🔄 Tune per-file thresholds and truncation messaging for high-volume repositories.
+   - ✅ Tune per-file thresholds and truncation messaging for high-volume repositories.
+      - ✅ Estimate token usage and warn when nearing the model's context window.
    - 🔄 Analyze augmented user prompts to ensure default metadata isn’t duplicated during context regeneration.
    - 🔄 Persist diagnostics in JSON output or verbose mode for downstream tooling.
 2. ⚪ Batching strategy

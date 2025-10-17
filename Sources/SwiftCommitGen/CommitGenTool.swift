@@ -71,7 +71,7 @@ struct CommitGenTool {
 
     logger.info("Requesting commit draft from the on-device language model…")
     var draft = try await llmClient.generateCommitDraft(from: promptPackage)
-  renderer.render(draft, format: options.outputFormat, diagnostics: promptPackage.diagnostics)
+    renderer.render(draft, format: options.outputFormat, diagnostics: promptPackage.diagnostics)
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
@@ -140,16 +140,16 @@ struct CommitGenTool {
         }
       case "r", "regen", "regenerate":
         logger.info("Requesting a new commit draft from the on-device language model…")
-        currentDraft = try await regenerate(nil)
-  renderer.render(currentDraft, format: .text, diagnostics: nil)
+    currentDraft = try await regenerate(nil)
+    renderer.render(currentDraft, format: .text, diagnostics: nil)
       case "c", "context":
         guard let additionalContext = promptForAdditionalContext() else {
           logger.warning("No additional context provided; keeping previous draft.")
           continue
         }
         logger.info("Requesting a new commit draft with user context…")
-        currentDraft = try await regenerate(additionalContext)
-  renderer.render(currentDraft, format: .text, diagnostics: nil)
+    currentDraft = try await regenerate(additionalContext)
+    renderer.render(currentDraft, format: .text, diagnostics: nil)
       case "n", "no", "q", "quit":
         break reviewLoop
       default:
@@ -303,6 +303,27 @@ struct CommitGenTool {
     }
 
     logger.info("Prompt budget: \(summaryComponents.joined(separator: ", "))")
+
+    let tokenUsage = diagnostics.actualTotalTokenCount ?? diagnostics.estimatedTokenCount
+    let tokenLabel = diagnostics.actualTotalTokenCount == nil ? "Estimated tokens" : "Tokens used"
+    let tokenUsageText = consoleTheme.applying(
+      consoleTheme.emphasis,
+      to: "\(tokenUsage)/\(diagnostics.estimatedTokenLimit)"
+    )
+    logger.info("\(tokenLabel): \(tokenUsageText)")
+
+    if let promptTokens = diagnostics.actualPromptTokenCount,
+      let outputTokens = diagnostics.actualOutputTokenCount
+    {
+      logger.info("Token breakdown: prompt \(promptTokens), output \(outputTokens)")
+    }
+
+    let warningThreshold = Int(Double(diagnostics.estimatedTokenLimit) * 0.9)
+    if warningThreshold > 0 && tokenUsage >= warningThreshold {
+      logger.warning(
+        "Prompt is approaching the \(diagnostics.estimatedTokenLimit)-token window; consider trimming context if generation fails."
+      )
+    }
 
     if diagnostics.userContextLineCount > 0 {
       logger.info("User context added \(diagnostics.userContextLineCount) line(s) to the prompt.")

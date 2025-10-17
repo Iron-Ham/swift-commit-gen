@@ -54,6 +54,12 @@ struct PromptDiagnostics: Codable, Sendable {
   var lineBudget: Int
   var userContextLineCount: Int = 0
 
+  var estimatedTokenCount: Int
+  var estimatedTokenLimit: Int
+  var actualPromptTokenCount: Int?
+  var actualOutputTokenCount: Int?
+  var actualTotalTokenCount: Int?
+
   var totalFiles: Int
   var displayedFiles: Int
   var configuredFileLimit: Int
@@ -79,10 +85,27 @@ struct PromptDiagnostics: Codable, Sendable {
   var remainderHintFiles: [Hint]
   var remainderNonGeneratedCount: Int
 
-  mutating func recordAdditionalUserContext(lineCount: Int) {
+  mutating func recordAdditionalUserContext(lineCount: Int, characterCount: Int) {
     guard lineCount > 0 else { return }
     userContextLineCount += lineCount
     estimatedLineCount += lineCount
+    estimatedTokenCount += Self.tokenEstimate(forCharacterCount: characterCount)
+  }
+
+  mutating func recordActualTokenUsage(
+    promptTokens: Int?,
+    outputTokens: Int?,
+    totalTokens: Int?
+  ) {
+    actualPromptTokenCount = promptTokens
+    actualOutputTokenCount = outputTokens
+    actualTotalTokenCount = totalTokens
+  }
+
+  private static func tokenEstimate(forCharacterCount count: Int) -> Int {
+    guard count > 0 else { return 0 }
+    let approximateCharactersPerToken = 4
+    return max(1, (count + (approximateCharactersPerToken - 1)) / approximateCharactersPerToken)
   }
 }
 
@@ -109,7 +132,13 @@ struct PromptPackage {
     }
 
     var updatedDiagnostics = diagnostics
-    updatedDiagnostics.recordAdditionalUserContext(lineCount: additionalLines)
+    let additionalCharacters = trimmed.count
+      + "Additional context from user:".count
+    let newlineCharacters = additionalLines  // account for line breaks
+    updatedDiagnostics.recordAdditionalUserContext(
+      lineCount: additionalLines,
+      characterCount: additionalCharacters + newlineCharacters
+    )
 
     return PromptPackage(
       systemPrompt: systemPrompt,
@@ -127,6 +156,10 @@ struct DefaultPromptBuilder: PromptBuilder {
   private let minSnippetLines: Int
   private let snippetReductionStep: Int
   private let hintThreshold: Int
+  private let mediumFileThreshold: Int
+  private let highFileThreshold: Int
+  private let mediumSnippetLimit: Int
+  private let lowSnippetLimit: Int
 
   init(
     maxFiles: Int = 12,
@@ -135,7 +168,11 @@ struct DefaultPromptBuilder: PromptBuilder {
     minFiles: Int = 3,
     minSnippetLines: Int = 0,
     snippetReductionStep: Int = 2,
-    hintThreshold: Int = 10
+    hintThreshold: Int = 10,
+    mediumFileThreshold: Int = 20,
+    highFileThreshold: Int = 40,
+    mediumSnippetLimit: Int = 4,
+    lowSnippetLimit: Int = 2
   ) {
     self.maxFiles = maxFiles
     self.maxSnippetLines = maxSnippetLines
@@ -144,13 +181,20 @@ struct DefaultPromptBuilder: PromptBuilder {
     self.minSnippetLines = minSnippetLines
     self.snippetReductionStep = max(1, snippetReductionStep)
     self.hintThreshold = hintThreshold
+    self.mediumFileThreshold = mediumFileThreshold
+    self.highFileThreshold = highFileThreshold
+    self.mediumSnippetLimit = mediumSnippetLimit
+    self.lowSnippetLimit = lowSnippetLimit
   }
 
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage {
     let system = buildSystemPrompt(style: metadata.style)
 
     var fileLimit = min(maxFiles, summary.fileCount)
-    var snippetLimit = maxSnippetLines
+    var snippetLimit = adjustedSnippetLimit(
+      totalFiles: summary.fileCount,
+      configuredLimit: maxSnippetLines
+    )
 
     var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
     var remainderContext = makeRemainderContext(
@@ -211,6 +255,7 @@ struct DefaultPromptBuilder: PromptBuilder {
     let finalCompaction = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
     let diagnostics = makeDiagnostics(
+      metadata: metadata,
       fullSummary: summary,
       displaySummary: displaySummary,
       snippetLimit: snippetLimit,
@@ -244,6 +289,18 @@ struct DefaultPromptBuilder: PromptBuilder {
       Leave the body empty when the subject already captures the change or the context is unclear.
       """
     }
+  }
+
+  private func adjustedSnippetLimit(totalFiles: Int, configuredLimit: Int) -> Int {
+    var limit = configuredLimit
+
+    if totalFiles >= highFileThreshold {
+      limit = min(limit, lowSnippetLimit)
+    } else if totalFiles >= mediumFileThreshold {
+      limit = min(limit, mediumSnippetLimit)
+    }
+
+    return max(limit, minSnippetLines)
   }
 }
 
@@ -419,6 +476,7 @@ private func makeRemainderContext(
 }
 
 private func makeDiagnostics(
+  metadata: PromptMetadata,
   fullSummary: ChangeSummary,
   displaySummary: ChangeSummary,
   snippetLimit: Int,
@@ -433,10 +491,20 @@ private func makeDiagnostics(
   let totalGenerated = fullSummary.files.filter { $0.isGenerated }.count
   let displayedGenerated = displaySummary.files.filter { $0.isGenerated }.count
   let truncatedCount = displaySummary.files.filter { $0.snippetTruncated }.count
+  let estimatedTokens = estimateTokenCount(
+    metadata: metadata,
+    displaySummary: displaySummary,
+    fullSummary: fullSummary,
+    isCompacted: isCompacted,
+    remainder: remainder
+  )
+  let tokenLimit = 4_096
 
   return PromptDiagnostics(
     estimatedLineCount: estimatedLines,
     lineBudget: lineBudget,
+    estimatedTokenCount: estimatedTokens,
+    estimatedTokenLimit: tokenLimit,
     totalFiles: fullSummary.fileCount,
     displayedFiles: displaySummary.fileCount,
     configuredFileLimit: configuredFileLimit,
@@ -455,6 +523,73 @@ private func makeDiagnostics(
     remainderHintFiles: remainder.hintFiles,
     remainderNonGeneratedCount: remainder.remainingNonGeneratedCount
   )
+}
+
+private func estimateTokenCount(
+  metadata: PromptMetadata,
+  displaySummary: ChangeSummary,
+  fullSummary: ChangeSummary,
+  isCompacted: Bool,
+  remainder: RemainderContext
+) -> Int {
+  var characterCount = 0
+
+  func addLine(_ line: String) {
+    characterCount += line.count + 1  // include newline separator
+  }
+
+  [
+    "Repository: \(metadata.repositoryName)",
+    "Branch: \(metadata.branchName)",
+    "Scope: \(metadata.scopeDescription)",
+    "Style: \(metadata.style)",
+  ].forEach(addLine)
+
+  addLine(
+    "Totals: \(fullSummary.fileCount) files; +\(fullSummary.totalAdditions) / -\(fullSummary.totalDeletions)"
+  )
+
+  if isCompacted {
+    addLine("Context trimmed to stay within the model window; prioritize the most impactful changes.")
+  }
+
+  if remainder.count > 0 {
+    addLine(
+      "Showing first \(displaySummary.fileCount) files (of \(fullSummary.fileCount)); remaining \(remainder.count) files contribute +\(remainder.additions) / -\(remainder.deletions)."
+    )
+
+    for entry in remainder.kindBreakdown.prefix(4) {
+      addLine("  more: \(entry.count) \(entry.kind) file(s)")
+    }
+
+    if remainder.generatedCount > 0 {
+      addLine("  note: \(remainder.generatedCount) generated file(s) omitted per .gitattributes")
+    }
+
+    if !remainder.hintFiles.isEmpty {
+      if remainder.remainingNonGeneratedCount > remainder.hintFiles.count {
+        addLine("  showing \(remainder.hintFiles.count) representative paths:")
+      }
+
+      for file in remainder.hintFiles {
+        let descriptor = [
+          file.kind,
+          locationDescription(file.location),
+          file.isBinary ? "binary" : nil,
+          file.isGenerated ? "generated" : nil,
+        ].compactMap { $0 }.joined(separator: ", ")
+        addLine("    • \(file.path) [\(descriptor)]")
+      }
+    }
+  }
+
+  for line in displaySummary.promptLines() {
+    addLine(line)
+  }
+
+  let approximateCharactersPerToken = 4
+  guard characterCount > 0 else { return 0 }
+  return max(1, (characterCount + (approximateCharactersPerToken - 1)) / approximateCharactersPerToken)
 }
 
 private func locationDescription(_ location: GitChangeLocation) -> String {
