@@ -61,6 +61,7 @@ struct CommitGenTool {
     )
 
     let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
+    logPromptDiagnostics(promptPackage.diagnostics)
 
     if options.outputFormat == .text {
       renderReviewSummary(summary)
@@ -84,6 +85,7 @@ struct CommitGenTool {
         let package =
           additionalContext.map { promptPackage.appendingUserContext($0) }
           ?? promptPackage
+        logPromptDiagnostics(package.diagnostics)
         return try await llmClient.generateCommitDraft(from: package)
       }
     ) {
@@ -280,6 +282,53 @@ struct CommitGenTool {
       ].joined()
       let location = consoleTheme.applying(consoleTheme.metadata, to: "[\(file.location)]")
       logger.info("\(bullet)\(path) \(stats) \(location)")
+    }
+  }
+
+  private func logPromptDiagnostics(_ diagnostics: PromptDiagnostics) {
+    let lineUsage = "\(diagnostics.estimatedLineCount)/\(diagnostics.lineBudget)"
+    let highlightedLines = consoleTheme.applying(consoleTheme.emphasis, to: lineUsage)
+    let fileUsage = "\(diagnostics.displayedFiles)/\(diagnostics.totalFiles)"
+    let highlightedFiles = consoleTheme.applying(consoleTheme.emphasis, to: fileUsage)
+
+    var summaryComponents: [String] = []
+    summaryComponents.append("lines \(highlightedLines)")
+    summaryComponents.append("files \(highlightedFiles)")
+    if diagnostics.compactionApplied {
+      summaryComponents.append(consoleTheme.applying(consoleTheme.muted, to: "compacted"))
+    }
+
+    logger.info("Prompt budget: \(summaryComponents.joined(separator: ", "))")
+
+    if diagnostics.userContextLineCount > 0 {
+      logger.info("User context added \(diagnostics.userContextLineCount) line(s) to the prompt.")
+    }
+
+    if diagnostics.snippetFilesTruncated > 0 {
+      logger.info(
+        "Truncated \(diagnostics.snippetFilesTruncated) snippet(s) to \(diagnostics.snippetLineLimit) line(s)."
+      )
+    }
+
+    if diagnostics.generatedFilesOmitted > 0 {
+      logger.info(
+        "Omitted \(diagnostics.generatedFilesOmitted) generated file(s) per .gitattributes."
+      )
+    }
+
+    if diagnostics.remainderCount > 0 {
+      var remainderSummary = "Remaining \(diagnostics.remainderCount) file(s) contribute +\(diagnostics.remainderAdditions) / -\(diagnostics.remainderDeletions)"
+      if diagnostics.remainderGeneratedCount > 0 {
+        remainderSummary += " (\(diagnostics.remainderGeneratedCount) generated)"
+      }
+      logger.info(remainderSummary + ".")
+
+      if !diagnostics.remainderHintFiles.isEmpty {
+        let sample = diagnostics.remainderHintFiles.prefix(3).map { $0.path }
+        if !sample.isEmpty {
+          logger.info("Example paths not shown in prompt: \(sample.joined(separator: ", ")).")
+        }
+      }
     }
   }
 
