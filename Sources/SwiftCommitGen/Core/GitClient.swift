@@ -118,6 +118,7 @@ protocol GitClient {
   func currentBranch() async throws -> String
   func stage(paths: [String]) async throws
   func commit(message: String) async throws
+  func generatedFileHints(for paths: [String]) async throws -> [String: Bool]
 }
 
 struct SystemGitClient: GitClient {
@@ -190,6 +191,34 @@ struct SystemGitClient: GitClient {
 
     try formatted.write(to: tempURL, atomically: true, encoding: .utf8)
     _ = try runGit(["commit", "-F", tempURL.path])
+  }
+
+  func generatedFileHints(for paths: [String]) async throws -> [String: Bool] {
+    guard !paths.isEmpty else { return [:] }
+    _ = try await repositoryRoot()
+    let output = try runGit(["check-attr", "linguist-generated", "--"] + paths)
+
+    var result: [String: Bool] = [:]
+    let lines = output.split(whereSeparator: \.isNewline)
+    for rawLine in lines {
+      let components = rawLine.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      guard components.count == 3 else { continue }
+      let path = components[0]
+      let value = components[2].lowercased()
+
+      let isGenerated: Bool
+      switch value {
+      case "true", "set", "1", "yes", "on":
+        isGenerated = true
+      default:
+        isGenerated = false
+      }
+
+      result[path] = isGenerated
+    }
+
+    return result
   }
 
   private func runGit(_ arguments: [String]) throws -> String {

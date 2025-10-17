@@ -14,6 +14,7 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     var isBinary: Bool
     var diffLineCount: Int
     var diffHasHunks: Bool
+  var isGenerated: Bool
 
     var label: String {
       "\(kind.description.capitalized) \(locationLabel)"
@@ -78,6 +79,7 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
 
     private var shouldRenderSnippet: Bool {
       guard !isBinary else { return false }
+      guard !isGenerated else { return false }
       guard !diffIsLarge else { return false }
       guard !snippet.isEmpty else { return false }
       return true
@@ -126,6 +128,10 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
 
       if !diffHasHunks && kind == .modified {
         notes.append("metadata-only change")
+      }
+
+      if isGenerated {
+        notes.append("marked as generated file (diff skipped)")
       }
 
       return notes
@@ -190,6 +196,16 @@ struct DefaultDiffSummarizer: DiffSummarizer {
       scopedChanges = status.staged + status.unstaged + status.untracked
     }
 
+    var attributePaths: Set<String> = []
+    for change in scopedChanges {
+      attributePaths.insert(change.path)
+      if let old = change.oldPath {
+        attributePaths.insert(old)
+      }
+    }
+
+    let generatedLookup = try await gitClient.generatedFileHints(for: Array(attributePaths))
+
     for change in scopedChanges {
       let diffInfo: ParsedDiff?
       switch change.location {
@@ -209,6 +225,20 @@ struct DefaultDiffSummarizer: DiffSummarizer {
       let lineCount = diffInfo?.lineCount ?? snippet.count
       let hasHunks = diffInfo?.hasHunks ?? false
 
+      let isGenerated = generatedLookup[change.path]
+        ?? change.oldPath.flatMap { generatedLookup[$0] }
+        ?? false
+
+      var adjustedSnippet = snippet
+      var adjustedTruncation = snippetTruncated
+      if isGenerated {
+        adjustedSnippet = []
+        adjustedTruncation = true
+      }
+
+      let limitedSnippet = Array(adjustedSnippet.prefix(maxLinesPerFile))
+      let truncatedByLimit = adjustedSnippet.count > maxLinesPerFile
+
       let summary = ChangeSummary.FileSummary(
         path: change.path,
         oldPath: change.oldPath,
@@ -216,11 +246,12 @@ struct DefaultDiffSummarizer: DiffSummarizer {
         location: change.location,
         additions: additions,
         deletions: deletions,
-        snippet: Array(snippet.prefix(maxLinesPerFile)),
-        snippetTruncated: snippetTruncated || snippet.count > maxLinesPerFile,
+        snippet: limitedSnippet,
+        snippetTruncated: adjustedTruncation || truncatedByLimit,
         isBinary: isBinary,
         diffLineCount: lineCount,
-        diffHasHunks: hasHunks
+        diffHasHunks: hasHunks,
+        isGenerated: isGenerated
       )
       summaries.append(summary)
     }

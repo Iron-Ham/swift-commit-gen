@@ -89,6 +89,7 @@ Phase 5b: Prompt Budget & Batching 🚧
 1. 🔄 Prompt heuristics
    - ✅ Capture large/binary diff metadata to summarize oversized changes without raw snippets.
    - ✅ Add adaptive compaction that trims snippets and file counts when prompts exceed line budgets.
+   - ✅ Detect files flagged as generated via `.gitattributes` (`linguist-generated`) and avoid sending their diffs.
    - 🔄 Tune per-file thresholds and truncation messaging for high-volume repositories.
    - 🔄 Analyze augmented user prompts to ensure default metadata isn’t duplicated during context regeneration.
 2. ⚪ Batching strategy

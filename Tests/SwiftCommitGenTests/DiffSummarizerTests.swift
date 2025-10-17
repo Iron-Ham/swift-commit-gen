@@ -127,4 +127,8 @@ private struct MockGitClient: GitClient {
   func stage(paths: [String]) async throws {}
 
   func commit(message: String) async throws {}
+
+  func generatedFileHints(for paths: [String]) async throws -> [String: Bool] {
+    [:]
+  }
 }
