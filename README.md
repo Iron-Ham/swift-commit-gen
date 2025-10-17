@@ -24,6 +24,22 @@ Prerequisites
 
 Installation
 ------------
+
+### Option 1: Homebrew (Recommended)
+
+```sh
+brew tap Iron-Ham/swift-commit-gen
+brew install swiftcommitgen
+```
+
+Or install directly without tapping:
+
+```sh
+brew install Iron-Ham/swift-commit-gen/swiftcommitgen
+```
+
+### Option 2: Install Script
+
 1. Clone the repository:
 	```sh
 	git clone https://github.com/Iron-Ham/swift-commit-gen.git
@@ -34,13 +50,20 @@ Installation
 	Scripts/install.sh
 	```
 	Pass a custom destination as the first argument to install elsewhere, e.g. `Scripts/install.sh /usr/local/bin`.
-3. (Optional) If you prefer manual installation, build and copy the binary yourself:
-	```sh
-	swift build -c release
-	install -d "$HOME/.local/bin"
-	install .build/release/swiftcommitgen "$HOME/.local/bin/"
-	```
-	Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile if needed.
+
+### Option 3: Manual Build
+
+If you prefer manual installation, build and copy the binary yourself:
+
+```sh
+git clone https://github.com/Iron-Ham/swift-commit-gen.git
+cd swift-commit-gen
+swift build -c release
+install -d "$HOME/.local/bin"
+install .build/release/swiftcommitgen "$HOME/.local/bin/"
+```
+
+Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile if needed.
 
 First-Run Notes
 ---------------
