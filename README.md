@@ -102,8 +102,8 @@ swiftcommitgen generate [OPTIONS]
 | Flag | Short | Description | Default | Notes |
 |------|-------|-------------|---------|-------|
 | `--staged-only` | `-s` | Only consider staged changes (ignore unstaged/untracked) | Off | Unstaged changes still can be staged later if `--stage` and `--commit` used. |
-| `--format <text|json>` |  | Output format for the draft | `text` | JSON skips interactive review (no edit/regen loop). |
-| `--style <summary|conventional|detailed>` |  | Prompt style influencing draft format | `summary` | Conventional follows Conventional Commits subject style. |
+| `--format <text\|json>` |  | Output format for the draft | `text` | JSON skips interactive review (no edit/regen loop). |
+| `--style <summary\|conventional\|detailed>` |  | Prompt style influencing draft format | `summary` | Conventional follows Conventional Commits subject style. |
 | `--commit` / `--no-commit` |  | Apply the accepted draft with `git commit` | On | `--no-commit` leaves the draft uncommitted. |
 | `--stage` / `--no-stage` |  | Stage unstaged/untracked files before committing | On (when `--commit`) | Ignored if `--no-commit`. |
 | `--verbose` | `-v` | Emit detailed prompt diagnostics and debug lines | Off | Shows `[DEBUG]` messages. Overrides `--quiet`. |
