@@ -86,6 +86,16 @@ swiftcommitgen generate
 
 ### Command
 
+You can invoke the tool either with the explicit `generate` subcommand or omit it because `generate` is the default subcommand.
+
+Primary (shorter) form:
+
+```
+swiftcommitgen [OPTIONS]
+```
+
+Equivalent explicit form:
+
 ```
 swiftcommitgen generate [OPTIONS]
 ```
@@ -126,31 +136,31 @@ Precedence: `--verbose` > `--quiet`. Supplying both yields verbose output.
 Generate and interactively accept a draft (default):
 
 ```
-swiftcommitgen generate
+swiftcommitgen
 ```
 
 Limit to staged changes and auto-commit:
 
 ```
-swiftcommitgen generate --staged-only --commit
+swiftcommitgen --staged-only --commit
 ```
 
 Show detailed diagnostics while still auto-committing unstaged files:
 
 ```
-swiftcommitgen generate --verbose --commit --stage
+swiftcommitgen --verbose --commit --stage
 ```
 
 Minimal essential output (quiet mode) but still commit:
 
 ```
-swiftcommitgen generate --quiet --commit
+swiftcommitgen --quiet --commit
 ```
 
 Produce machine-readable JSON (no interactive loop):
 
 ```
-swiftcommitgen generate --format json
+swiftcommitgen --format json
 ```
 
 ### Help
@@ -158,7 +168,7 @@ swiftcommitgen generate --format json
 Run:
 
 ```
-swiftcommitgen generate --help
+swiftcommitgen --help
 ```
 
-to view authoritative usage from the parser.
+to view authoritative usage. You can still use `swiftcommitgen generate --help`—both are equivalent.
