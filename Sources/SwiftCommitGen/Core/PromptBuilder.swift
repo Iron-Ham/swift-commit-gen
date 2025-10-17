@@ -36,13 +36,13 @@ protocol PromptBuilder {
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage
 }
 
-struct PromptDiagnostics {
-  struct KindCount: Hashable {
+struct PromptDiagnostics: Codable, Sendable {
+  struct KindCount: Codable, Hashable, Sendable {
     var kind: String
     var count: Int
   }
 
-  struct Hint: Hashable {
+  struct Hint: Codable, Hashable, Sendable {
     var path: String
     var kind: String
     var location: GitChangeLocation

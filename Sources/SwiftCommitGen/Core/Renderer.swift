@@ -1,7 +1,11 @@
 import Foundation
 
 protocol Renderer {
-  func render(_ draft: CommitDraft, format: CommitGenOptions.OutputFormat)
+  func render(
+    _ draft: CommitDraft,
+    format: CommitGenOptions.OutputFormat,
+    diagnostics: PromptDiagnostics?
+  )
 }
 
 struct ConsoleRenderer: Renderer {
@@ -11,7 +15,11 @@ struct ConsoleRenderer: Renderer {
     self.theme = theme
   }
 
-  func render(_ draft: CommitDraft, format: CommitGenOptions.OutputFormat) {
+  func render(
+    _ draft: CommitDraft,
+    format: CommitGenOptions.OutputFormat,
+    diagnostics: PromptDiagnostics?
+  ) {
     switch format {
     case .text:
       let subjectLine = theme.applying(theme.commitSubject, to: draft.subject)
@@ -26,11 +34,17 @@ struct ConsoleRenderer: Renderer {
     case .json:
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      if let data = try? encoder.encode(draft),
+      let payload = CommitGenerationOutput(commit: draft, diagnostics: diagnostics)
+      if let data = try? encoder.encode(payload),
         let output = String(data: data, encoding: .utf8)
       {
         print(output)
       }
     }
   }
+}
+
+private struct CommitGenerationOutput: Encodable {
+  var commit: CommitDraft
+  var diagnostics: PromptDiagnostics?
 }

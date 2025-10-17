@@ -28,4 +28,5 @@ struct CommitGenOptions {
   var promptStyle: PromptStyle
   var autoCommit: Bool
   var stageChanges: Bool
+  var isVerbose: Bool
 }

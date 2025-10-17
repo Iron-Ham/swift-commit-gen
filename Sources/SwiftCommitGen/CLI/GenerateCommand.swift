@@ -26,24 +26,36 @@ struct GenerateCommand: AsyncParsableCommand {
   @Option(name: .long, help: "Choose the prompt style (summary, conventional, detailed).")
   var style: Style = .summary
 
-  @Flag(name: .long, help: "Automatically commit the accepted draft.")
-  var commit: Bool = false
+  @Flag(
+    name: .long,
+    inversion: .prefixedNo,
+    help: "Automatically commit the accepted draft (use --no-commit to skip)."
+  )
+  var commit: Bool = true
 
-  @Flag(name: .long, help: "Stage summarized changes before committing (implies --commit).")
-  var stage: Bool = false
+  @Flag(
+    name: .long,
+    inversion: .prefixedNo,
+    help: "Stage summarized changes before committing (use --no-stage to opt out)."
+  )
+  var stage: Bool = true
+
+  @Flag(name: [.customShort("v"), .long], help: "Print additional diagnostics and prompt budgeting details.")
+  var verbose: Bool = false
 
   func run() async throws {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
     let promptStyle = CommitGenOptions.PromptStyle(rawValue: style.rawValue) ?? .summary
-    let autoCommit = commit || stage
-    let stageChanges = autoCommit && stage
+  let autoCommit = commit
+  let stageChanges = autoCommit && stage
 
     let options = CommitGenOptions(
       includeStagedOnly: stagedOnly,
       outputFormat: outputFormat,
       promptStyle: promptStyle,
       autoCommit: autoCommit,
-      stageChanges: stageChanges
+      stageChanges: stageChanges,
+      isVerbose: verbose
     )
 
     let tool = CommitGenTool(options: options)

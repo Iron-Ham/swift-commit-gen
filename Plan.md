@@ -76,12 +76,14 @@ Phase 6: CLI Experience 🔄
 1. ✅ Command flow
    - ✅ Default invocation runs inspection → summarization → model call → preview.
    - ✅ Provide `--staged` to limit to staged changes.
+   - ✅ Auto-commit accepted drafts by default (disable with `--no-commit`).
 2. 🔄 Interactive review
    - ✅ Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
    - ✅ On accept, optionally stage files (`--stage`) and run `git commit -F -` using the generated text (`--commit`).
    - ✅ Surface a summary of changes that will be committed alongside the draft.
    - ✅ Provide `r` (regenerate) and `c` (regenerate with context) options, reusing the current prompt package.
    - ✅ Add ANSI theming so logs and summaries highlight paths, additions, deletions, and metadata.
+   - ✅ Add `--verbose` to opt into additional diagnostics and prompt-budget reporting.
 3. ✅ Add `--print-json` for tooling integration (via `--format json`).
 
 Phase 5b: Prompt Budget & Batching 🚧

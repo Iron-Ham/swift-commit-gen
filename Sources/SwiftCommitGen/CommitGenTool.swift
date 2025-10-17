@@ -61,7 +61,9 @@ struct CommitGenTool {
     )
 
     let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
-    logPromptDiagnostics(promptPackage.diagnostics)
+    if options.isVerbose {
+      logPromptDiagnostics(promptPackage.diagnostics)
+    }
 
     if options.outputFormat == .text {
       renderReviewSummary(summary)
@@ -69,7 +71,7 @@ struct CommitGenTool {
 
     logger.info("Requesting commit draft from the on-device language model…")
     var draft = try await llmClient.generateCommitDraft(from: promptPackage)
-    renderer.render(draft, format: options.outputFormat)
+  renderer.render(draft, format: options.outputFormat, diagnostics: promptPackage.diagnostics)
 
     guard options.outputFormat == .text else {
       logger.info("JSON output requested; skipping interactive review.")
@@ -85,7 +87,9 @@ struct CommitGenTool {
         let package =
           additionalContext.map { promptPackage.appendingUserContext($0) }
           ?? promptPackage
-        logPromptDiagnostics(package.diagnostics)
+        if options.isVerbose {
+          logPromptDiagnostics(package.diagnostics)
+        }
         return try await llmClient.generateCommitDraft(from: package)
       }
     ) {
@@ -132,12 +136,12 @@ struct CommitGenTool {
       case "e", "edit":
         if let updated = try editDraft(currentDraft) {
           currentDraft = updated
-          renderer.render(currentDraft, format: .text)
+          renderer.render(currentDraft, format: .text, diagnostics: nil)
         }
       case "r", "regen", "regenerate":
         logger.info("Requesting a new commit draft from the on-device language model…")
         currentDraft = try await regenerate(nil)
-        renderer.render(currentDraft, format: .text)
+  renderer.render(currentDraft, format: .text, diagnostics: nil)
       case "c", "context":
         guard let additionalContext = promptForAdditionalContext() else {
           logger.warning("No additional context provided; keeping previous draft.")
@@ -145,7 +149,7 @@ struct CommitGenTool {
         }
         logger.info("Requesting a new commit draft with user context…")
         currentDraft = try await regenerate(additionalContext)
-        renderer.render(currentDraft, format: .text)
+  renderer.render(currentDraft, format: .text, diagnostics: nil)
       case "n", "no", "q", "quit":
         break reviewLoop
       default:
@@ -243,7 +247,7 @@ struct CommitGenTool {
 
     guard options.autoCommit else {
       logger.warning(
-        "Automated git commit remains optional. Run `git commit` manually using the accepted draft when ready."
+        "Auto-commit disabled; run `git commit` manually or re-run with --commit to apply the draft automatically."
       )
       return
     }
