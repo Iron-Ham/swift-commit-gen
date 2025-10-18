@@ -1,13 +1,13 @@
 import ArgumentParser
 import Foundation
+
 #if canImport(Darwin)
-import Darwin
+  import Darwin
 #elseif canImport(Glibc)
-import Glibc
+  import Glibc
 #endif
 
 struct ConfigCommand: ParsableCommand {
-
   struct Dependencies {
     var makeStore: () -> any ConfigCommandStore
     var makeIO: () -> any ConfigCommandIO
@@ -72,7 +72,9 @@ struct ConfigCommand: ParsableCommand {
       try store.save(configuration)
       print("Configuration updated at \(store.configurationLocation().path).")
     } else if shouldRunInteractively && !io.isInteractive {
-      print("Interactive configuration requires an interactive terminal. Pass flags to configure non-interactively.")
+      print(
+        "Interactive configuration requires an interactive terminal. Pass flags to configure non-interactively."
+      )
     }
 
     if useInteractive || show || changed {
@@ -189,8 +191,9 @@ struct ConfigCommand: ParsableCommand {
     let isVerboseDefault = configuration.defaultVerbose == true
     let isQuietDefault = configuration.defaultQuiet == true
     let isStandardDefault = !isVerboseDefault && !isQuietDefault
-    let standardNote = isStandardDefault && configuration.defaultVerbose == nil
-      && configuration.defaultQuiet == nil ? "(default)" : nil
+    let standardNote =
+      isStandardDefault && configuration.defaultVerbose == nil
+        && configuration.defaultQuiet == nil ? "(default)" : nil
     printPreference(
       title: "Default verbosity",
       choices: [
@@ -218,7 +221,8 @@ private struct DisplayChoice {
 private func printPreference(title: String, choices: [DisplayChoice], theme: ConsoleTheme) {
   print(theme.applying(theme.emphasis, to: "\(title):"))
   for choice in choices {
-    let marker = choice.isCurrent
+    let marker =
+      choice.isCurrent
       ? theme.applying(theme.emphasis, to: ">")
       : theme.applying(theme.muted, to: " ")
     var description = "\(marker) \(choice.name)"
@@ -237,11 +241,14 @@ private func printPreference(title: String, choices: [DisplayChoice], theme: Con
 }
 
 private enum ConfigCommandDependencyContext {
-  @TaskLocal static var override: ConfigCommand.Dependencies?
+  @TaskLocal
+  static var override: ConfigCommand.Dependencies?
 }
 
 extension ConfigCommand {
-  static func withDependencies<Result>(_ dependencies: Dependencies, run operation: () throws -> Result)
+  static func withDependencies<Result>(
+    _ dependencies: Dependencies, run operation: () throws -> Result
+  )
     rethrows -> Result
   {
     try ConfigCommandDependencyContext.$override.withValue(dependencies) {
@@ -290,13 +297,13 @@ protocol ConfigCommandIO: AnyObject {
 
 final class TerminalConfigCommandIO: ConfigCommandIO {
   var isInteractive: Bool {
-#if canImport(Darwin)
-    return isatty(STDIN_FILENO) == 1
-#elseif canImport(Glibc)
-    return isatty(STDIN_FILENO) == 1
-#else
-    return true
-#endif
+    #if canImport(Darwin)
+      return isatty(STDIN_FILENO) == 1
+    #elseif canImport(Glibc)
+      return isatty(STDIN_FILENO) == 1
+    #else
+      return true
+    #endif
   }
 
   func printLine(_ text: String) {
@@ -318,7 +325,9 @@ struct ConfigInteractiveEditor {
     self.theme = theme
   }
 
-  func edit(configuration: UserConfiguration)
+  func edit(
+    configuration: UserConfiguration
+  )
     -> (configuration: UserConfiguration, changed: Bool)
   {
     var updated = configuration
@@ -356,7 +365,8 @@ struct ConfigInteractiveEditor {
       }
     }
 
-    let changed = updated.autoStageIfNoStaged != original.autoStageIfNoStaged
+    let changed =
+      updated.autoStageIfNoStaged != original.autoStageIfNoStaged
       || updated.defaultVerbose != original.defaultVerbose
       || updated.defaultQuiet != original.defaultQuiet
 
@@ -473,14 +483,16 @@ struct ConfigInteractiveEditor {
     additionalInstructions: [String] = []
   ) -> Value? {
     io.printLine("")
-    let titleLine = theme.applying(theme.emphasis, to: "\(title) (")
+    let titleLine =
+      theme.applying(theme.emphasis, to: "\(title) (")
       + theme.applying(theme.path, to: currentDescription)
       + theme.applying(theme.emphasis, to: "):")
     io.printLine(titleLine)
 
     for choice in choices where choice.isVisible {
       let choiceIsCurrent = isCurrent(choice.value)
-      let marker = choiceIsCurrent
+      let marker =
+        choiceIsCurrent
         ? theme.applying(theme.emphasis, to: ">")
         : theme.applying(theme.muted, to: " ")
       var line = "\(marker) \(choice.label)) \(choice.description)"

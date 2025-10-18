@@ -33,7 +33,8 @@ struct GenerateCommand: AsyncParsableCommand {
   )
   private var verboseFlag: Bool = false
 
-  @Flag(name: .customLong("no-verbose"), help: "Disable verbose output even if configured as default.")
+  @Flag(
+    name: .customLong("no-verbose"), help: "Disable verbose output even if configured as default.")
   private var noVerboseFlag: Bool = false
 
   @Flag(
@@ -77,13 +78,13 @@ struct GenerateCommand: AsyncParsableCommand {
       quietPreference = nil
     }
 
-  let autoCommit = commit
-  let stageAllBeforeGenerating = stagePreference ?? false
-  let resolvedVerbose = verbosePreference ?? userConfig.defaultVerbose ?? false
-  let resolvedQuiet = quietPreference ?? userConfig.defaultQuiet ?? false
-  let effectiveQuiet = resolvedVerbose ? false : resolvedQuiet
-  let configuredAutoStage = userConfig.autoStageIfNoStaged ?? false
-  let autoStageIfNoStaged = stagePreference ?? configuredAutoStage
+    let autoCommit = commit
+    let stageAllBeforeGenerating = stagePreference ?? false
+    let resolvedVerbose = verbosePreference ?? userConfig.defaultVerbose ?? false
+    let resolvedQuiet = quietPreference ?? userConfig.defaultQuiet ?? false
+    let effectiveQuiet = resolvedVerbose ? false : resolvedQuiet
+    let configuredAutoStage = userConfig.autoStageIfNoStaged ?? false
+    let autoStageIfNoStaged = stagePreference ?? configuredAutoStage
 
     let options = CommitGenOptions(
       outputFormat: outputFormat,

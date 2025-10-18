@@ -50,13 +50,15 @@ struct UserConfigurationStore {
     } else {
       let home = fileManager.homeDirectoryForCurrentUser
       #if os(macOS)
-      baseDirectory = home.appendingPathComponent("Library/Application Support", isDirectory: true)
+        baseDirectory = home.appendingPathComponent(
+          "Library/Application Support", isDirectory: true)
       #else
-      baseDirectory = home.appendingPathComponent(".config", isDirectory: true)
+        baseDirectory = home.appendingPathComponent(".config", isDirectory: true)
       #endif
     }
 
-    return baseDirectory
+    return
+      baseDirectory
       .appendingPathComponent("swiftcommitgen", isDirectory: true)
       .appendingPathComponent("config.json", isDirectory: false)
   }

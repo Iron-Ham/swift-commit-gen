@@ -96,7 +96,10 @@ final class InMemoryConfigStore: ConfigCommandStore {
   private(set) var savedConfiguration: UserConfiguration?
   private let location: URL
 
-  init(initial: UserConfiguration = UserConfiguration(), location: URL = URL(fileURLWithPath: "/tmp/swiftcommitgen-config.json")) {
+  init(
+    initial: UserConfiguration = UserConfiguration(),
+    location: URL = URL(fileURLWithPath: "/tmp/swiftcommitgen-config.json")
+  ) {
     self.configuration = initial
     self.location = location
   }
