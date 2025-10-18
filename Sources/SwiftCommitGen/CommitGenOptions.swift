@@ -1,12 +1,12 @@
 import FoundationModels
 
 struct CommitGenOptions {
-  enum OutputFormat: String {
+  enum OutputFormat: String, Codable {
     case text
     case json
   }
 
-  enum PromptStyle: String, PromptRepresentable {
+  enum PromptStyle: String, PromptRepresentable, Codable {
     case summary
     case conventional
     case detailed
@@ -27,6 +27,7 @@ struct CommitGenOptions {
   var promptStyle: PromptStyle
   var autoCommit: Bool
   var stageAllBeforeGenerating: Bool
+  var autoStageIfNoStaged: Bool
   var isVerbose: Bool
   var isQuiet: Bool
 }

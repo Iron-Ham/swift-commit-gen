@@ -46,6 +46,21 @@ struct CommitGenTool {
       status = try await gitClient.status()
     }
 
+    if options.autoStageIfNoStaged && status.staged.isEmpty {
+      let pendingBeforeAutoStage = status.unstaged.count + status.untracked.count
+      if pendingBeforeAutoStage > 0 {
+        logger.notice(
+          "No staged changes detected; auto-staging \(pendingBeforeAutoStage) pending change(s) per configuration."
+        )
+      } else {
+        logger.notice(
+          "No staged changes detected; auto-stage configuration will attempt to stage tracked and untracked files."
+        )
+      }
+      try await gitClient.stageAll()
+      status = try await gitClient.status()
+    }
+
     let stagedChanges = status.staged
     let ignoredPending = status.unstaged.count + status.untracked.count
 
@@ -59,6 +74,12 @@ struct CommitGenTool {
     }
 
     logger.notice("Detected \(stagedChanges.count) staged change(s).")
+
+    if ignoredPending > 0 {
+      logger.warning(
+        "Ignoring \(ignoredPending) unstaged/untracked change(s). Stage them manually or re-run with --stage to include them."
+      )
+    }
 
     let stagedStatus = GitStatus(staged: stagedChanges, unstaged: [], untracked: [])
     let summary = try await summarizer.summarize(status: stagedStatus)
@@ -275,7 +296,7 @@ struct CommitGenTool {
   }
 
   private func handleAcceptedDraft(
-    _ draft: CommitDraft,
+    _ draft: CommitDraft
   ) async throws {
     logger.notice("Commit draft accepted.")
 

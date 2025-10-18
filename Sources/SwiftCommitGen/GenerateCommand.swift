@@ -21,7 +21,7 @@ struct GenerateCommand: AsyncParsableCommand {
   var format: OutputFormat = .text
 
   @Option(name: .long, help: "Choose the prompt style (summary, conventional, detailed).")
-  var style: Style = .summary
+  var style: Style?
 
   @Flag(
     name: .long,
@@ -31,33 +31,79 @@ struct GenerateCommand: AsyncParsableCommand {
   var commit: Bool = true
 
   @Flag(name: .long, help: "Stage all pending changes (including untracked) before generating.")
-  var stage: Bool = false
+  private var stageFlag: Bool = false
+
+  @Flag(name: .customLong("no-stage"), help: "Disable staging even if enabled via configuration.")
+  private var noStageFlag: Bool = false
 
   @Flag(
     name: [.customShort("v"), .long],
     help: "Print additional diagnostics and prompt budgeting details (overrides --quiet)."
   )
-  var verbose: Bool = false
+  private var verboseFlag: Bool = false
+
+  @Flag(name: .customLong("no-verbose"), help: "Disable verbose output even if configured as default.")
+  private var noVerboseFlag: Bool = false
 
   @Flag(
     name: [.customShort("q"), .long],
     help: "Suppress routine info output (warnings/errors still shown). Ignored if --verbose is set."
   )
-  var quiet: Bool = false
+  private var quietFlag: Bool = false
+
+  @Flag(name: .customLong("no-quiet"), help: "Disable quiet mode even if configured as default.")
+  private var noQuietFlag: Bool = false
 
   func run() async throws {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
-    let promptStyle = CommitGenOptions.PromptStyle(rawValue: style.rawValue) ?? .summary
-    let autoCommit = commit
-    let stageAllBeforeGenerating = stage
+    let configStore = UserConfigurationStore()
+    let userConfig = (try? configStore.load()) ?? UserConfiguration()
 
-    let effectiveQuiet = verbose ? false : quiet
+    let selectedStyle = style.flatMap { CommitGenOptions.PromptStyle(rawValue: $0.rawValue) }
+    let promptStyle = selectedStyle ?? userConfig.preferredStyle ?? .summary
+
+    let stagePreference: Bool?
+    if stageFlag {
+      stagePreference = true
+    } else if noStageFlag {
+      stagePreference = false
+    } else {
+      stagePreference = nil
+    }
+
+    let verbosePreference: Bool?
+    if verboseFlag {
+      verbosePreference = true
+    } else if noVerboseFlag {
+      verbosePreference = false
+    } else {
+      verbosePreference = nil
+    }
+
+    let quietPreference: Bool?
+    if quietFlag {
+      quietPreference = true
+    } else if noQuietFlag {
+      quietPreference = false
+    } else {
+      quietPreference = nil
+    }
+
+  let autoCommit = commit
+  let stageAllBeforeGenerating = stagePreference ?? false
+  let resolvedVerbose = verbosePreference ?? userConfig.defaultVerbose ?? false
+  let resolvedQuiet = quietPreference ?? userConfig.defaultQuiet ?? false
+  let effectiveQuiet = resolvedVerbose ? false : resolvedQuiet
+  let configuredAutoStage = userConfig.autoStageIfNoStaged ?? false
+  let autoStageIfNoStaged = stagePreference ?? configuredAutoStage
+
     let options = CommitGenOptions(
       outputFormat: outputFormat,
       promptStyle: promptStyle,
       autoCommit: autoCommit,
       stageAllBeforeGenerating: stageAllBeforeGenerating,
-      isVerbose: verbose,
+      autoStageIfNoStaged: autoStageIfNoStaged,
+      isVerbose: resolvedVerbose,
       isQuiet: effectiveQuiet
     )
 
