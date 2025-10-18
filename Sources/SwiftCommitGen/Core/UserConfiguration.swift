@@ -1,7 +1,6 @@
 import Foundation
 
 struct UserConfiguration: Codable {
-  var preferredStyle: CommitGenOptions.PromptStyle?
   var autoStageIfNoStaged: Bool?
   var defaultVerbose: Bool?
   var defaultQuiet: Bool?

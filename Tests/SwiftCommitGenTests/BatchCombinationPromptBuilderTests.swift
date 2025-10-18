@@ -9,7 +9,7 @@ struct BatchCombinationPromptBuilderTests {
     let metadata = PromptMetadata(
       repositoryName: "DemoRepo",
       branchName: "feature/batch",
-      style: .summary,
+      style: .detailed,
       includeUnstagedChanges: false
     )
 
@@ -42,6 +42,9 @@ struct BatchCombinationPromptBuilderTests {
     #expect(package.diagnostics.generatedFilesDisplayed == 1)
     #expect(package.diagnostics.estimatedLineCount > 0)
     #expect(package.diagnostics.estimatedTokenCount > 0)
+
+    let instructions = String(describing: package.systemPrompt)
+    #expect(instructions.contains("Style: use the body for a few short sentences"))
 
     let description = String(describing: package.userPrompt)
     #expect(description.contains("Repository: DemoRepo"))
@@ -91,6 +94,7 @@ struct BatchCombinationPromptBuilderTests {
 
     let instructions = String(describing: package.systemPrompt)
     #expect(instructions.contains("You are an AI assistant"))
+    #expect(instructions.contains("Style: use the body for a few short sentences"))
   }
 
   private func makePartial(

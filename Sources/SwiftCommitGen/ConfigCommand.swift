@@ -31,12 +31,6 @@ struct ConfigCommand: ParsableCommand {
   @Flag(name: .long, help: "Display the current configuration without making changes.")
   var show: Bool = false
 
-  @Option(name: .long, help: "Set the preferred default prompt style (summary, conventional, detailed).")
-  var style: GenerateCommand.Style?
-
-  @Flag(name: .customLong("clear-style"), help: "Remove the stored default prompt style.")
-  var clearStyle: Bool = false
-
   @Option(name: .long, help: "Stage all files automatically when none are staged (true/false).")
   var autoStageIfClean: Bool?
 
@@ -89,9 +83,6 @@ struct ConfigCommand: ParsableCommand {
   }
 
   private func validateOptions() throws {
-    if style != nil && clearStyle {
-      throw ValidationError("Cannot use --style together with --clear-style.")
-    }
     if autoStageIfClean != nil && clearAutoStage {
       throw ValidationError("Cannot use --auto-stage-if-clean together with --clear-auto-stage.")
     }
@@ -108,8 +99,6 @@ struct ConfigCommand: ParsableCommand {
 
   private var shouldRunInteractively: Bool {
     !show
-      && style == nil
-      && !clearStyle
       && autoStageIfClean == nil
       && !clearAutoStage
       && verbose == nil
@@ -120,20 +109,6 @@ struct ConfigCommand: ParsableCommand {
 
   private func applyDirectUpdates(to configuration: inout UserConfiguration) -> Bool {
     var changed = false
-
-    if clearStyle {
-      if configuration.preferredStyle != nil {
-        configuration.preferredStyle = nil
-        changed = true
-      }
-    }
-    if let newStyle = style {
-      let next = CommitGenOptions.PromptStyle(rawValue: newStyle.rawValue)
-      if configuration.preferredStyle != next {
-        configuration.preferredStyle = next
-        changed = true
-      }
-    }
 
     if clearAutoStage {
       if configuration.autoStageIfNoStaged != nil {
@@ -193,23 +168,6 @@ struct ConfigCommand: ParsableCommand {
     let header = theme.applying(theme.emphasis, to: "Configuration file:")
     print("\(header) \(theme.applying(theme.path, to: location.path))")
     print("")
-
-    let currentStyle = configuration.preferredStyle ?? .summary
-    let styleWasDefault = configuration.preferredStyle == nil
-    printPreference(
-      title: "Preferred prompt style",
-      choices: [
-        DisplayChoice(
-          name: "summary",
-          isCurrent: currentStyle == .summary,
-          isRecommended: true,
-          note: styleWasDefault && currentStyle == .summary ? "(default)" : nil
-        ),
-        DisplayChoice(name: "conventional", isCurrent: currentStyle == .conventional),
-        DisplayChoice(name: "detailed", isCurrent: currentStyle == .detailed),
-      ],
-      theme: theme
-    )
 
     let autoStagePref = configuration.autoStageIfNoStaged
     let autoStageCurrent = autoStagePref ?? false
@@ -370,19 +328,6 @@ struct ConfigInteractiveEditor {
     let instructions = theme.applying(theme.muted, to: "(press Enter to keep current values)")
     io.printLine("\(header) \(instructions)")
 
-    if let styleChoice = promptForStyle(current: configuration.preferredStyle) {
-      switch styleChoice {
-      case .summary:
-        updated.preferredStyle = .summary
-      case .conventional:
-        updated.preferredStyle = .conventional
-      case .detailed:
-        updated.preferredStyle = .detailed
-      case .clear:
-        updated.preferredStyle = nil
-      }
-    }
-
     if let autoStageChoice = promptForAutoStage(current: configuration.autoStageIfNoStaged) {
       switch autoStageChoice {
       case .enabled:
@@ -411,57 +356,11 @@ struct ConfigInteractiveEditor {
       }
     }
 
-    let changed = updated.preferredStyle != original.preferredStyle
-      || updated.autoStageIfNoStaged != original.autoStageIfNoStaged
+    let changed = updated.autoStageIfNoStaged != original.autoStageIfNoStaged
       || updated.defaultVerbose != original.defaultVerbose
       || updated.defaultQuiet != original.defaultQuiet
 
     return (updated, changed)
-  }
-
-  private func promptForStyle(current: CommitGenOptions.PromptStyle?) -> StyleChoice? {
-    let currentDescription = (current ?? .summary).rawValue
-    let choices: [Choice<StyleChoice>] = [
-      Choice(
-        label: "1",
-        tokens: ["1", "summary", "s"],
-        description: "summary",
-        value: .summary,
-        isRecommended: true
-      ),
-      Choice(
-        label: "2",
-        tokens: ["2", "conventional", "c"],
-        description: "conventional",
-        value: .conventional
-      ),
-      Choice(label: "3", tokens: ["3", "detailed", "d"], description: "detailed", value: .detailed),
-      Choice(
-        label: "",
-        tokens: ["clear", "reset", "default"],
-        description: "",
-        value: .clear,
-        isVisible: false
-      ),
-    ]
-    return promptChoice(
-      title: "Preferred prompt style",
-      currentDescription: currentDescription,
-      choices: choices,
-      keepMessage: "Press Enter to keep current style.",
-      isCurrent: { choiceValue in
-        switch (choiceValue, current) {
-        case (.summary, .some(.summary)), (.summary, .none):
-          return true
-        case (.conventional, .some(.conventional)):
-          return true
-        case (.detailed, .some(.detailed)):
-          return true
-        default:
-          return false
-        }
-      }
-    )
   }
 
   private func promptForAutoStage(current: Bool?) -> AutoStageChoice? {
@@ -621,13 +520,6 @@ struct ConfigInteractiveEditor {
     func matches(_ input: String) -> Bool {
       tokens.contains(input.lowercased())
     }
-  }
-
-  private enum StyleChoice {
-    case summary
-    case conventional
-    case detailed
-    case clear
   }
 
   private enum AutoStageChoice {

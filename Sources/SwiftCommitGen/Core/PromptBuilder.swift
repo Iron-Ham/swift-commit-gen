@@ -304,6 +304,8 @@ struct DefaultPromptBuilder: PromptBuilder {
       When more explanation is helpful, provide a short body with full sentences.
       Leave the body empty when the subject already captures the change or the context is unclear.
       """
+      ""
+      style.styleGuidance
     }
   }
 

@@ -68,6 +68,8 @@ struct BatchCombinationPromptBuilder {
 
       Be clear and concise, but do not omit critical information.
       """
+      ""
+      metadata.style.styleGuidance
     }
 
     let characterCount = userLines.reduce(0) { $0 + $1.count + 1 }

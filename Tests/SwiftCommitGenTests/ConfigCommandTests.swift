@@ -8,7 +8,7 @@ struct ConfigCommandTests {
   @Test("interactive updates stored configuration")
   func interactiveUpdatesConfiguration() throws {
     let store = InMemoryConfigStore()
-    let io = TestConfigCommandIO(inputs: ["2", "1", "2"])
+    let io = TestConfigCommandIO(inputs: ["1", "2"])
     try ConfigCommand.withDependencies(.init(makeStore: { store }, makeIO: { io })) {
       let command = try ConfigCommand.parse([])
       try command.run()
@@ -16,7 +16,6 @@ struct ConfigCommandTests {
 
     #expect(store.saveCallCount == 1)
     let saved = store.savedConfiguration
-    #expect(saved?.preferredStyle == .conventional)
     #expect(saved?.autoStageIfNoStaged == true)
     #expect(saved?.defaultVerbose == true)
     #expect(saved?.defaultQuiet == nil)
@@ -25,12 +24,10 @@ struct ConfigCommandTests {
   @Test("interactive keeps existing values when inputs are empty")
   func interactiveKeepsConfigurationWhenBlank() throws {
     var initial = UserConfiguration()
-    initial.preferredStyle = .summary
     initial.autoStageIfNoStaged = true
     initial.defaultQuiet = true
-
     let store = InMemoryConfigStore(initial: initial)
-    let io = TestConfigCommandIO(inputs: ["", "", ""])
+    let io = TestConfigCommandIO(inputs: ["", ""])
     try ConfigCommand.withDependencies(.init(makeStore: { store }, makeIO: { io })) {
       let command = try ConfigCommand.parse([])
       try command.run()

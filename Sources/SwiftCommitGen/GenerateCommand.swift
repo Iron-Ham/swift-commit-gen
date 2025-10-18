@@ -11,17 +11,8 @@ struct GenerateCommand: AsyncParsableCommand {
     case json
   }
 
-  enum Style: String, ExpressibleByArgument {
-    case summary
-    case conventional
-    case detailed
-  }
-
   @Option(name: .long, help: "Choose the output format.")
   var format: OutputFormat = .text
-
-  @Option(name: .long, help: "Choose the prompt style (summary, conventional, detailed).")
-  var style: Style?
 
   @Flag(
     name: .long,
@@ -58,9 +49,6 @@ struct GenerateCommand: AsyncParsableCommand {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
     let configStore = UserConfigurationStore()
     let userConfig = (try? configStore.load()) ?? UserConfiguration()
-
-    let selectedStyle = style.flatMap { CommitGenOptions.PromptStyle(rawValue: $0.rawValue) }
-    let promptStyle = selectedStyle ?? userConfig.preferredStyle ?? .summary
 
     let stagePreference: Bool?
     if stageFlag {
@@ -99,7 +87,7 @@ struct GenerateCommand: AsyncParsableCommand {
 
     let options = CommitGenOptions(
       outputFormat: outputFormat,
-      promptStyle: promptStyle,
+      promptStyle: .detailed,
       autoCommit: autoCommit,
       stageAllBeforeGenerating: stageAllBeforeGenerating,
       autoStageIfNoStaged: autoStageIfNoStaged,
