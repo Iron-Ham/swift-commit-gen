@@ -33,20 +33,35 @@ struct CommitGenTool {
     let repoRoot = try await gitClient.repositoryRoot()
     logger.info("Repository root: \(repoRoot.path)")
 
-    let status = try await gitClient.status()
-    let scope: GitChangeScope = options.includeStagedOnly ? .staged : .all
-    let changes = status.changes(for: scope)
+    var status = try await gitClient.status()
 
-    guard !changes.isEmpty else {
+    if options.stageAllBeforeGenerating {
+      let pendingBeforeStage = status.unstaged.count + status.untracked.count
+      if pendingBeforeStage > 0 {
+        logger.notice("Staging \(pendingBeforeStage) pending change(s) due to --stage flag.")
+      } else {
+        logger.notice("--stage flag set; staging tracked and untracked files (nothing pending).")
+      }
+      try await gitClient.stageAll()
+      status = try await gitClient.status()
+    }
+
+    let stagedChanges = status.staged
+    let ignoredPending = status.unstaged.count + status.untracked.count
+
+    if stagedChanges.isEmpty {
+      if ignoredPending > 0 {
+        logger.warning(
+          "Found \(ignoredPending) change(s) that are not staged; they are ignored. Stage them manually or re-run with --stage."
+        )
+      }
       throw CommitGenError.cleanWorkingTree
     }
 
-    logger.notice("Detected \(changes.count) pending change(s) in \(describe(scope: scope)) scope.")
+    logger.notice("Detected \(stagedChanges.count) staged change(s).")
 
-    let summary = try await summarizer.summarize(
-      status: status,
-      includeStagedOnly: options.includeStagedOnly
-    )
+    let stagedStatus = GitStatus(staged: stagedChanges, unstaged: [], untracked: [])
+    let summary = try await summarizer.summarize(status: stagedStatus)
     logger.notice(
       "Summary: \(summary.fileCount) file(s), +\(summary.totalAdditions) / -\(summary.totalDeletions)"
     )
@@ -57,7 +72,7 @@ struct CommitGenTool {
       repositoryName: repoName,
       branchName: branchName,
       style: options.promptStyle,
-      includeUnstagedChanges: !options.includeStagedOnly
+      includeUnstagedChanges: false
     )
 
     if options.outputFormat == .text {
@@ -126,20 +141,9 @@ struct CommitGenTool {
       }
     ) {
       draft = reviewedDraft
-      try await handleAcceptedDraft(draft, summary: summary, status: status)
+      try await handleAcceptedDraft(draft)
     } else {
       logger.warning("Commit generation flow aborted; no changes were committed.")
-    }
-  }
-
-  private func describe(scope: GitChangeScope) -> String {
-    switch scope {
-    case .staged:
-      "staged"
-    case .unstaged:
-      "unstaged"
-    case .all:
-      "staged + unstaged"
     }
   }
 
@@ -272,8 +276,6 @@ struct CommitGenTool {
 
   private func handleAcceptedDraft(
     _ draft: CommitDraft,
-    summary: ChangeSummary,
-    status: GitStatus
   ) async throws {
     logger.notice("Commit draft accepted.")
 
@@ -282,21 +284,6 @@ struct CommitGenTool {
         "Auto-commit disabled; run `git commit` manually or re-run with --commit to apply the draft automatically."
       )
       return
-    }
-
-    if !options.includeStagedOnly {
-      let hasPending = !status.unstaged.isEmpty || !status.untracked.isEmpty
-      if hasPending {
-        guard options.stageChanges else {
-          logger.warning(
-            "Unstaged changes detected; re-run with --stage to stage them automatically. Commit skipped."
-          )
-          return
-        }
-
-        try await stageChanges(for: status)
-        logger.notice("Staged unstaged/untracked changes before committing.")
-      }
     }
 
     try await gitClient.commit(message: draft.commitMessage)
@@ -422,21 +409,6 @@ struct CommitGenTool {
         }
       }
     }
-  }
-
-  private func stageChanges(for status: GitStatus) async throws {
-    let pending = status.unstaged + status.untracked
-    guard !pending.isEmpty else { return }
-
-    var paths: Set<String> = []
-    for change in pending {
-      paths.insert(change.path)
-      if let old = change.oldPath {
-        paths.insert(old)
-      }
-    }
-
-    try await gitClient.stage(paths: Array(paths).sorted())
   }
 }
 

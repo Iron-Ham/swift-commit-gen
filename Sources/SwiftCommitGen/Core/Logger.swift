@@ -89,5 +89,5 @@ struct CommitGenLogger {
   var consoleTheme: ConsoleTheme { theme }
 
   var isVerboseEnabled: Bool { isVerbose }
-  var isQuietEnabled: Bool { isQuiet }
+  var isQuietEnabled: Bool { isQuiet } 
 }

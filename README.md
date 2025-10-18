@@ -103,21 +103,20 @@ swiftcommitgen generate [OPTIONS]
 ```
 
 ### Generation Flow
-1. Inspect repository (staged + optionally unstaged changes)
+1. Inspect repository (staged changes only)
 2. Summarize diff and plan prompt batches if large
 3. Request draft commit message from on-device model
 4. Interactive review loop (accept / edit / regenerate)
-5. Optional auto-stage and auto-commit
+5. Optional auto-commit
 
 ### Flags & Options
 
 | Flag | Short | Description | Default | Notes |
 |------|-------|-------------|---------|-------|
-| `--staged-only` | `-s` | Only consider staged changes (ignore unstaged/untracked) | Off | Unstaged changes still can be staged later if `--stage` and `--commit` used. |
 | `--format <text\|json>` |  | Output format for the draft | `text` | JSON skips interactive review (no edit/regen loop). |
 | `--style <summary\|conventional\|detailed>` |  | Prompt style influencing draft format | `summary` | Conventional follows Conventional Commits subject style. |
 | `--commit` / `--no-commit` |  | Apply the accepted draft with `git commit` | On | `--no-commit` leaves the draft uncommitted. |
-| `--stage` / `--no-stage` |  | Stage unstaged/untracked files before committing | On (when `--commit`) | Ignored if `--no-commit`. |
+| `--stage` |  | Stage all pending changes (including untracked) before drafting | Off | Equivalent to `git add --all` prior to generation. |
 | `--verbose` | `-v` | Emit detailed prompt diagnostics and debug lines | Off | Shows `[DEBUG]` messages. Overrides `--quiet`. |
 | `--quiet` | `-q` | Suppress routine info lines | Off | Hides `[INFO]` but keeps `[NOTICE]`, warnings, errors. Ignored if `--verbose` is present. |
 
@@ -141,16 +140,16 @@ Generate and interactively accept a draft (default):
 swiftcommitgen
 ```
 
-Limit to staged changes and auto-commit:
+Auto-commit the already staged changes:
 
 ```sh
-swiftcommitgen --staged-only --commit
+swiftcommitgen --commit
 ```
 
-Show detailed diagnostics while still auto-committing unstaged files:
+Stage everything first, then show verbose diagnostics:
 
 ```sh
-swiftcommitgen --verbose --commit --stage
+swiftcommitgen --stage --verbose
 ```
 
 Minimal essential output (quiet mode) but still commit:

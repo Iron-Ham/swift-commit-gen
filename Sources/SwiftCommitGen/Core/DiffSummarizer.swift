@@ -220,7 +220,7 @@ extension ChangeSummary {
 }
 
 protocol DiffSummarizer {
-  func summarize(status: GitStatus, includeStagedOnly: Bool) async throws -> ChangeSummary
+  func summarize(status: GitStatus) async throws -> ChangeSummary
 }
 
 struct DefaultDiffSummarizer: DiffSummarizer {
@@ -234,20 +234,11 @@ struct DefaultDiffSummarizer: DiffSummarizer {
     self.maxFullLinesPerFile = max(maxLinesPerFile, maxFullLinesPerFile)
   }
 
-  func summarize(status: GitStatus, includeStagedOnly: Bool) async throws -> ChangeSummary {
+  func summarize(status: GitStatus) async throws -> ChangeSummary {
     var summaries: [ChangeSummary.FileSummary] = []
 
     let stagedDiff = status.staged.isEmpty ? [:] : parseDiff(try await gitClient.diffStaged())
-    let unstagedDiff =
-      includeStagedOnly || status.unstaged.isEmpty
-      ? [:] : parseDiff(try await gitClient.diffUnstaged())
-
-    let scopedChanges: [GitFileChange]
-    if includeStagedOnly {
-      scopedChanges = status.staged
-    } else {
-      scopedChanges = status.staged + status.unstaged + status.untracked
-    }
+    let scopedChanges = status.staged
 
     var attributePaths: Set<String> = []
     for change in scopedChanges {
@@ -264,9 +255,7 @@ struct DefaultDiffSummarizer: DiffSummarizer {
       switch change.location {
       case .staged:
         diffInfo = stagedDiff[change.path] ?? stagedDiff[change.oldPath ?? ""]
-      case .unstaged:
-        diffInfo = unstagedDiff[change.path] ?? unstagedDiff[change.oldPath ?? ""]
-      case .untracked:
+      case .unstaged, .untracked:
         diffInfo = nil
       }
 

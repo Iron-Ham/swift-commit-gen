@@ -17,9 +17,6 @@ struct GenerateCommand: AsyncParsableCommand {
     case detailed
   }
 
-  @Flag(name: [.customShort("s"), .long], help: "Only consider staged changes.")
-  var stagedOnly: Bool = false
-
   @Option(name: .long, help: "Choose the output format.")
   var format: OutputFormat = .text
 
@@ -33,12 +30,8 @@ struct GenerateCommand: AsyncParsableCommand {
   )
   var commit: Bool = true
 
-  @Flag(
-    name: .long,
-    inversion: .prefixedNo,
-    help: "Stage summarized changes before committing (use --no-stage to opt out)."
-  )
-  var stage: Bool = true
+  @Flag(name: .long, help: "Stage all pending changes (including untracked) before generating.")
+  var stage: Bool = false
 
   @Flag(
     name: [.customShort("v"), .long],
@@ -56,15 +49,14 @@ struct GenerateCommand: AsyncParsableCommand {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
     let promptStyle = CommitGenOptions.PromptStyle(rawValue: style.rawValue) ?? .summary
     let autoCommit = commit
-    let stageChanges = autoCommit && stage
+    let stageAllBeforeGenerating = stage
 
     let effectiveQuiet = verbose ? false : quiet
     let options = CommitGenOptions(
-      includeStagedOnly: stagedOnly,
       outputFormat: outputFormat,
       promptStyle: promptStyle,
       autoCommit: autoCommit,
-      stageChanges: stageChanges,
+      stageAllBeforeGenerating: stageAllBeforeGenerating,
       isVerbose: verbose,
       isQuiet: effectiveQuiet
     )

@@ -23,11 +23,10 @@ struct CommitGenOptions {
     }
   }
 
-  var includeStagedOnly: Bool
   var outputFormat: OutputFormat
   var promptStyle: PromptStyle
   var autoCommit: Bool
-  var stageChanges: Bool
+  var stageAllBeforeGenerating: Bool
   var isVerbose: Bool
   var isQuiet: Bool
 }

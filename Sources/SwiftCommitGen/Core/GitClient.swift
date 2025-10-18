@@ -118,6 +118,7 @@ protocol GitClient {
   func listChangedFiles(scope: GitChangeScope) async throws -> [GitFileChange]
   func currentBranch() async throws -> String
   func stage(paths: [String]) async throws
+  func stageAll() async throws
   func commit(message: String) async throws
   func generatedFileHints(for paths: [String]) async throws -> [String: Bool]
 }
@@ -176,6 +177,11 @@ struct SystemGitClient: GitClient {
     guard !paths.isEmpty else { return }
     _ = try await repositoryRoot()
     _ = try runGit(["add", "--"] + paths)
+  }
+
+  func stageAll() async throws {
+    _ = try await repositoryRoot()
+    _ = try runGit(["add", "--all"])
   }
 
   func commit(message: String) async throws {

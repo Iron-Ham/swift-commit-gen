@@ -34,7 +34,7 @@ struct DiffSummarizerTests {
     )
 
     let summarizer = DefaultDiffSummarizer(gitClient: client, maxLinesPerFile: 10)
-    let summary = try await summarizer.summarize(status: status, includeStagedOnly: true)
+    let summary = try await summarizer.summarize(status: status)
 
     #expect(summary.fileCount == 1)
     #expect(summary.totalAdditions == 1)
@@ -46,8 +46,8 @@ struct DiffSummarizerTests {
     #expect(fileSummary?.snippet.isEmpty == false)
   }
 
-  @Test("Includes unstaged and untracked files when requested")
-  func includesUnstagedAndUntracked() async throws {
+  @Test("Ignores unstaged and untracked changes")
+  func ignoresUnstagedAndUntracked() async throws {
     let staged = GitFileChange(
       path: "Sources/App/Staged.swift", oldPath: nil, kind: .modified, location: .staged)
     let unstaged = GitFileChange(
@@ -83,14 +83,12 @@ struct DiffSummarizerTests {
     )
 
     let summarizer = DefaultDiffSummarizer(gitClient: client, maxLinesPerFile: 10)
-    let summary = try await summarizer.summarize(status: status, includeStagedOnly: false)
+    let summary = try await summarizer.summarize(status: status)
 
-    #expect(summary.fileCount == 3)
-    #expect(summary.totalAdditions == 2)
-    #expect(summary.totalDeletions == 2)
-
-    let untrackedSummary = summary.files.first { $0.location == .untracked }
-    #expect(untrackedSummary?.snippet.first?.contains("untracked") == true)
+    #expect(summary.fileCount == 1)
+    #expect(summary.totalAdditions == 1)
+    #expect(summary.totalDeletions == 1)
+    #expect(summary.files.allSatisfy { $0.location == .staged })
   }
 }
 
@@ -125,6 +123,8 @@ private struct MockGitClient: GitClient {
   }
 
   func stage(paths: [String]) async throws {}
+
+  func stageAll() async throws {}
 
   func commit(message: String) async throws {}
 
