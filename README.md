@@ -9,12 +9,13 @@ Features
 --------
 - Detects dirty Git worktrees and extracts concise change context
 - Crafts commit message drafts with Apple's onboard generative APIs
-- Provides interactive acceptance or edit flow before writing the commit
+- Provides an interactive acceptance/edit flow before writing the commit
+- Persists CLI defaults with an interactive `config` command
 - Respects local-only privacy requirements (no network calls)
 
 Project Status
 --------------
-The CLI currently supports end-to-end commit generation, including Git inspection, AI-assisted drafting, interactive editing, and optional auto-staging/committing. Configuration files and advanced batching for huge diffs remain on the roadmap.
+The CLI currently supports end-to-end commit generation, including Git inspection, AI-assisted drafting, interactive editing, optional auto-staging/committing, and persistent configuration defaults. Advanced batching for huge diffs is available and continues to evolve based on real-world feedback.
 
 Prerequisites
 -------------
@@ -113,12 +114,14 @@ swiftcommitgen generate [OPTIONS]
 
 | Flag | Short | Description | Default | Notes |
 |------|-------|-------------|---------|-------|
-| `--format <text\|json>` |  | Output format for the draft | `text` | JSON skips interactive review (no edit/regen loop). |
-| `--style <summary\|conventional\|detailed>` |  | Prompt style influencing draft format | `summary` | Conventional follows Conventional Commits subject style. |
+| `--format <text\|json>` |  | Output format for the draft | `text` | JSON skips the interactive review loop. |
 | `--commit` / `--no-commit` |  | Apply the accepted draft with `git commit` | On | `--no-commit` leaves the draft uncommitted. |
-| `--stage` |  | Stage all pending changes (including untracked) before drafting | Off | Equivalent to `git add --all` prior to generation. |
+| `--stage` |  | Stage all pending changes (including untracked) before drafting | Off | Equivalent to `git add --all` before generation. |
+| `--no-stage` |  | Disable staging, even if configured as a default | - | Wins over stored auto-stage preferences. |
 | `--verbose` | `-v` | Emit detailed prompt diagnostics and debug lines | Off | Shows `[DEBUG]` messages. Overrides `--quiet`. |
+| `--no-verbose` |  | Force verbose output off, even if configured as default | - | Useful for scripts overriding stored settings. |
 | `--quiet` | `-q` | Suppress routine info lines | Off | Hides `[INFO]` but keeps `[NOTICE]`, warnings, errors. Ignored if `--verbose` is present. |
+| `--no-quiet` |  | Ensure quiet mode is disabled, even if configured | - | Helpful when scripts need full output. |
 
 ### Verbosity Levels
 
@@ -163,6 +166,28 @@ Produce machine-readable JSON (no interactive loop):
 ```sh
 swiftcommitgen --format json
 ```
+
+Configuration Defaults
+----------------------
+Use the `config` subcommand to inspect or update stored defaults. Running it with no flags opens an interactive, colorized editor that walks through each preference:
+
+```sh
+swiftcommitgen config
+```
+
+Available options:
+
+| Flag | Description |
+|------|-------------|
+| `--show` | Print the current configuration without making changes. |
+| `--auto-stage-if-clean <true\|false>` | Persist whether `generate` should stage all files when nothing is staged. |
+| `--clear-auto-stage` | Remove the stored auto-stage preference. |
+| `--verbose <true\|false>` | Set the default verbose logging preference. |
+| `--clear-verbose` | Remove the stored verbose preference. |
+| `--quiet <true\|false>` | Set the default quiet logging preference. |
+| `--clear-quiet` | Remove the stored quiet preference. |
+
+When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/swiftcommitgen/config.json` (or the XDG config directory on non-macOS platforms).
 
 ### Help
 
