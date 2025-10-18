@@ -122,16 +122,3 @@ Phase 8: Testing & Tooling
    - Use dependency injection for `ProcessRunner` and `LLMClient`.
    - Add targeted tests for `FoundationModelsClient` once a mockable session abstraction is in place.
 2. Add sample fixtures for diff parsing and prompt generation.
-3. Create `swift test` workflow and document manual verification steps.
-
-Phase 9: Documentation & Release Prep
--------------------------------------
-1. Expand README with installation, usage, and troubleshooting.
-2. Add CHANGELOG, LICENSE, and contribution guidelines.
-3. Prepare Homebrew tap formula or binary distribution instructions (future).
-
-Milestones
-----------
-- M1: Git inspection + diff summarization works without invoking the model (pure analysis mode).
-- M2: Model integration produces commit proposals (manual acceptance).
-- M3: Configurable CLI with tests and documentation ready for v0.1.0.
