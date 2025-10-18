@@ -5,7 +5,7 @@ struct SwiftCommitGenCLI: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "swiftcommitgen",
     abstract: "Generate AI-assisted Git commit messages using Apple's on-device models.",
-    version: "0.1.1",
+    version: "0.2.0",
     subcommands: [GenerateCommand.self],
     defaultSubcommand: GenerateCommand.self
   )
