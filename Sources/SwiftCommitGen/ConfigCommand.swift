@@ -61,12 +61,13 @@ struct ConfigCommand: ParsableCommand {
     let store = dependencies.makeStore()
     var configuration = try store.load()
     let io = dependencies.makeIO()
+    let theme = ConsoleTheme.resolve(stream: .stdout)
 
     let useInteractive = shouldRunInteractively && io.isInteractive
     var changed = false
 
     if useInteractive {
-      let result = ConfigInteractiveEditor(io: io).edit(configuration: configuration)
+      let result = ConfigInteractiveEditor(io: io, theme: theme).edit(configuration: configuration)
       configuration = result.configuration
       changed = result.changed
     } else {
@@ -81,7 +82,7 @@ struct ConfigCommand: ParsableCommand {
     }
 
     if useInteractive || show || changed {
-      printConfiguration(configuration, location: store.configurationLocation())
+      printConfiguration(configuration, location: store.configurationLocation(), theme: theme)
     } else if !changed {
       print("No configuration changes provided. Use --show to inspect current values.")
     }
@@ -184,29 +185,97 @@ struct ConfigCommand: ParsableCommand {
     return changed
   }
 
-  private func printConfiguration(_ configuration: UserConfiguration, location: URL) {
-    func formatBool(_ value: Bool?) -> String {
-      switch value {
-      case .some(true):
-        return "true"
-      case .some(false):
-        return "false"
-      case .none:
-        return "(unset)"
-      }
+  private func printConfiguration(
+    _ configuration: UserConfiguration,
+    location: URL,
+    theme: ConsoleTheme
+  ) {
+    let header = theme.applying(theme.emphasis, to: "Configuration file:")
+    print("\(header) \(theme.applying(theme.path, to: location.path))")
+    print("")
+
+    let currentStyle = configuration.preferredStyle ?? .summary
+    let styleWasDefault = configuration.preferredStyle == nil
+    printPreference(
+      title: "Preferred prompt style",
+      choices: [
+        DisplayChoice(
+          name: "summary",
+          isCurrent: currentStyle == .summary,
+          isRecommended: true,
+          note: styleWasDefault && currentStyle == .summary ? "(default)" : nil
+        ),
+        DisplayChoice(name: "conventional", isCurrent: currentStyle == .conventional),
+        DisplayChoice(name: "detailed", isCurrent: currentStyle == .detailed),
+      ],
+      theme: theme
+    )
+
+    let autoStagePref = configuration.autoStageIfNoStaged
+    let autoStageCurrent = autoStagePref ?? false
+    let autoStageNote: String?
+    if autoStagePref == nil && !autoStageCurrent {
+      autoStageNote = "(default)"
+    } else {
+      autoStageNote = nil
     }
+    printPreference(
+      title: "Auto-stage when clean",
+      choices: [
+        DisplayChoice(name: "enable", isCurrent: autoStageCurrent, isRecommended: true),
+        DisplayChoice(name: "disable", isCurrent: !autoStageCurrent, note: autoStageNote),
+      ],
+      theme: theme
+    )
 
-    let styleDescription = configuration.preferredStyle?.rawValue ?? "(unset)"
-    let autoStageDescription = formatBool(configuration.autoStageIfNoStaged)
-    let verboseDescription = formatBool(configuration.defaultVerbose)
-    let quietDescription = formatBool(configuration.defaultQuiet)
-
-    print("Configuration file: \(location.path)")
-    print("preferred-style: \(styleDescription)")
-    print("auto-stage-if-clean: \(autoStageDescription)")
-    print("verbose: \(verboseDescription)")
-    print("quiet: \(quietDescription)")
+    let isVerboseDefault = configuration.defaultVerbose == true
+    let isQuietDefault = configuration.defaultQuiet == true
+    let isStandardDefault = !isVerboseDefault && !isQuietDefault
+    let standardNote = isStandardDefault && configuration.defaultVerbose == nil
+      && configuration.defaultQuiet == nil ? "(default)" : nil
+    printPreference(
+      title: "Default verbosity",
+      choices: [
+        DisplayChoice(
+          name: "standard",
+          isCurrent: isStandardDefault,
+          isRecommended: true,
+          note: standardNote
+        ),
+        DisplayChoice(name: "verbose", isCurrent: isVerboseDefault),
+        DisplayChoice(name: "quiet", isCurrent: isQuietDefault),
+      ],
+      theme: theme
+    )
   }
+}
+
+private struct DisplayChoice {
+  var name: String
+  var isCurrent: Bool
+  var isRecommended: Bool = false
+  var note: String?
+}
+
+private func printPreference(title: String, choices: [DisplayChoice], theme: ConsoleTheme) {
+  print(theme.applying(theme.emphasis, to: "\(title):"))
+  for choice in choices {
+    let marker = choice.isCurrent
+      ? theme.applying(theme.emphasis, to: ">")
+      : theme.applying(theme.muted, to: " ")
+    var description = "\(marker) \(choice.name)"
+    if choice.isRecommended {
+      description += " " + theme.applying(theme.muted, to: "(recommended)")
+    }
+    if let note = choice.note {
+      description += " " + theme.applying(theme.muted, to: note)
+    }
+    if choice.isCurrent {
+      description += " " + theme.applying(theme.infoLabel, to: "[current]")
+    }
+    print("  \(description)")
+  }
+  print("")
 }
 
 private enum ConfigCommandDependencyContext {
@@ -284,9 +353,11 @@ final class TerminalConfigCommandIO: ConfigCommandIO {
 
 struct ConfigInteractiveEditor {
   private let io: any ConfigCommandIO
+  private let theme: ConsoleTheme
 
-  init(io: any ConfigCommandIO) {
+  init(io: any ConfigCommandIO, theme: ConsoleTheme) {
     self.io = io
+    self.theme = theme
   }
 
   func edit(configuration: UserConfiguration)
@@ -295,7 +366,9 @@ struct ConfigInteractiveEditor {
     var updated = configuration
     let original = configuration
 
-    io.printLine("Interactive configuration editor (press Enter to keep current values).")
+    let header = theme.applying(theme.emphasis, to: "Interactive configuration editor")
+    let instructions = theme.applying(theme.muted, to: "(press Enter to keep current values)")
+    io.printLine("\(header) \(instructions)")
 
     if let styleChoice = promptForStyle(current: configuration.preferredStyle) {
       switch styleChoice {
@@ -305,7 +378,7 @@ struct ConfigInteractiveEditor {
         updated.preferredStyle = .conventional
       case .detailed:
         updated.preferredStyle = .detailed
-      case .unset:
+      case .clear:
         updated.preferredStyle = nil
       }
     }
@@ -316,7 +389,7 @@ struct ConfigInteractiveEditor {
         updated.autoStageIfNoStaged = true
       case .disabled:
         updated.autoStageIfNoStaged = false
-      case .unset:
+      case .clear:
         updated.autoStageIfNoStaged = nil
       }
     }
@@ -347,19 +420,47 @@ struct ConfigInteractiveEditor {
   }
 
   private func promptForStyle(current: CommitGenOptions.PromptStyle?) -> StyleChoice? {
-    let currentDescription = current?.rawValue ?? "(unset)"
+    let currentDescription = (current ?? .summary).rawValue
     let choices: [Choice<StyleChoice>] = [
-      Choice(label: "1", tokens: ["1", "summary", "s"], description: "summary", value: .summary),
       Choice(
-        label: "2", tokens: ["2", "conventional", "c"], description: "conventional", value: .conventional
+        label: "1",
+        tokens: ["1", "summary", "s"],
+        description: "summary",
+        value: .summary,
+        isRecommended: true
+      ),
+      Choice(
+        label: "2",
+        tokens: ["2", "conventional", "c"],
+        description: "conventional",
+        value: .conventional
       ),
       Choice(label: "3", tokens: ["3", "detailed", "d"], description: "detailed", value: .detailed),
-      Choice(label: "4", tokens: ["4", "unset", "u"], description: "unset", value: .unset),
+      Choice(
+        label: "",
+        tokens: ["clear", "reset", "default"],
+        description: "",
+        value: .clear,
+        isVisible: false
+      ),
     ]
     return promptChoice(
-      title: "Preferred prompt style (current: \(currentDescription)):",
+      title: "Preferred prompt style",
+      currentDescription: currentDescription,
       choices: choices,
-      keepMessage: "Press Enter to keep current style."
+      keepMessage: "Press Enter to keep current style.",
+      isCurrent: { choiceValue in
+        switch (choiceValue, current) {
+        case (.summary, .some(.summary)), (.summary, .none):
+          return true
+        case (.conventional, .some(.conventional)):
+          return true
+        case (.detailed, .some(.detailed)):
+          return true
+        default:
+          return false
+        }
+      }
     )
   }
 
@@ -368,22 +469,51 @@ struct ConfigInteractiveEditor {
     switch current {
     case .some(true):
       currentDescription = "enabled"
-    case .some(false):
+    case .some(false), .none:
       currentDescription = "disabled"
-    case .none:
-      currentDescription = "(unset)"
     }
 
     let choices: [Choice<AutoStageChoice>] = [
-      Choice(label: "1", tokens: ["1", "yes", "y"], description: "enable", value: .enabled),
-      Choice(label: "2", tokens: ["2", "no", "n"], description: "disable", value: .disabled),
-      Choice(label: "3", tokens: ["3", "unset", "u"], description: "unset", value: .unset),
+      Choice(
+        label: "1",
+        tokens: ["1", "yes", "y", "enable"],
+        description: "enable",
+        value: .enabled,
+        isRecommended: true
+      ),
+      Choice(
+        label: "2",
+        tokens: ["2", "no", "n", "disable"],
+        description: "disable",
+        value: .disabled
+      ),
+      Choice(
+        label: "",
+        tokens: ["clear", "reset"],
+        description: "",
+        value: .clear,
+        isVisible: false
+      ),
     ]
 
     return promptChoice(
-      title: "Automatically stage files when none are staged (current: \(currentDescription)):",
+      title: "Automatically stage files when none are staged",
+      currentDescription: currentDescription,
       choices: choices,
-      keepMessage: "Press Enter to keep current auto-stage preference."
+      keepMessage: "Press Enter to keep current auto-stage preference.",
+      isCurrent: { choiceValue in
+        switch (choiceValue, current) {
+        case (.enabled, .some(true)):
+          return true
+        case (.disabled, .some(false)):
+          return true
+        case (.disabled, .none):
+          return true
+        default:
+          return false
+        }
+      },
+      additionalInstructions: ["Type 'clear' to remove the stored preference."]
     )
   }
 
@@ -408,27 +538,64 @@ struct ConfigInteractiveEditor {
     }
 
     let choices: [Choice<VerbosityChoice>] = [
-      Choice(label: "1", tokens: ["1", "standard", "s"], description: "standard", value: .standard),
+      Choice(
+        label: "1",
+        tokens: ["1", "standard", "s"],
+        description: "standard",
+        value: .standard,
+        isRecommended: true
+      ),
       Choice(label: "2", tokens: ["2", "verbose", "v"], description: "verbose", value: .verbose),
       Choice(label: "3", tokens: ["3", "quiet", "q"], description: "quiet", value: .quiet),
     ]
 
     return promptChoice(
-      title: "Default verbosity (current: \(description)):",
+      title: "Default verbosity",
+      currentDescription: description,
       choices: choices,
-      keepMessage: "Press Enter to keep current verbosity."
+      keepMessage: "Press Enter to keep current verbosity.",
+      isCurrent: { choiceValue in
+        switch (choiceValue, currentChoice) {
+        case (.standard, .standard), (.verbose, .verbose), (.quiet, .quiet):
+          return true
+        default:
+          return false
+        }
+      }
     )
   }
 
   private func promptChoice<Value>(
     title: String,
+    currentDescription: String,
     choices: [Choice<Value>],
-    keepMessage: String
+    keepMessage: String,
+    isCurrent: (Value) -> Bool,
+    additionalInstructions: [String] = []
   ) -> Value? {
     io.printLine("")
-    io.printLine(title)
-    for choice in choices {
-      io.printLine("  \(choice.label)) \(choice.description)")
+    let titleLine = theme.applying(theme.emphasis, to: "\(title) (")
+      + theme.applying(theme.path, to: currentDescription)
+      + theme.applying(theme.emphasis, to: "):")
+    io.printLine(titleLine)
+
+    for choice in choices where choice.isVisible {
+      let choiceIsCurrent = isCurrent(choice.value)
+      let marker = choiceIsCurrent
+        ? theme.applying(theme.emphasis, to: ">")
+        : theme.applying(theme.muted, to: " ")
+      var line = "\(marker) \(choice.label)) \(choice.description)"
+      if choice.isRecommended {
+        line += " " + theme.applying(theme.muted, to: "(recommended)")
+      }
+      if choiceIsCurrent {
+        line += " " + theme.applying(theme.infoLabel, to: "[current]")
+      }
+      io.printLine("  \(line)")
+    }
+
+    for instruction in additionalInstructions {
+      io.printLine("  " + theme.applying(theme.muted, to: instruction))
     }
 
     while true {
@@ -439,7 +606,7 @@ struct ConfigInteractiveEditor {
       if let match = choices.first(where: { $0.matches(normalized) }) {
         return match.value
       }
-      io.printLine("Invalid selection. Please try again.")
+      io.printLine(theme.applying(theme.warningMessage, to: "Invalid selection. Please try again."))
     }
   }
 
@@ -448,9 +615,11 @@ struct ConfigInteractiveEditor {
     let tokens: [String]
     let description: String
     let value: Value
+    var isRecommended: Bool = false
+    var isVisible: Bool = true
 
     func matches(_ input: String) -> Bool {
-      tokens.contains(input)
+      tokens.contains(input.lowercased())
     }
   }
 
@@ -458,13 +627,13 @@ struct ConfigInteractiveEditor {
     case summary
     case conventional
     case detailed
-    case unset
+    case clear
   }
 
   private enum AutoStageChoice {
     case enabled
     case disabled
-    case unset
+    case clear
   }
 
   private enum VerbosityChoice {
