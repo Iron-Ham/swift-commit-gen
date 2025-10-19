@@ -50,7 +50,8 @@ struct GenerateCommand: AsyncParsableCommand {
 
   @Flag(
     name: .customLong("single-file"),
-    help: "Process each file independently before combining the drafts into a single commit message."
+    help:
+      "Process each file independently before combining the drafts into a single commit message."
   )
   private var singleFile: Bool = false
 
@@ -86,7 +87,9 @@ struct GenerateCommand: AsyncParsableCommand {
       quietPreference = nil
     }
 
-    let generationMode: CommitGenOptions.GenerationMode = singleFile ? .perFile : .automatic
+    let configuredGenerationMode = userConfig.defaultGenerationMode ?? .automatic
+    let generationMode: CommitGenOptions.GenerationMode =
+      singleFile ? .perFile : configuredGenerationMode
 
     let autoCommit = commit
     let stageAllBeforeGenerating = stagePreference ?? false

@@ -8,6 +8,20 @@ import Foundation
 #endif
 
 struct ConfigCommand: ParsableCommand {
+  enum GenerationModeOption: String, ExpressibleByArgument, Codable {
+    case automatic
+    case perFile = "per-file"
+
+    var mode: CommitGenOptions.GenerationMode {
+      switch self {
+      case .automatic:
+        return .automatic
+      case .perFile:
+        return .perFile
+      }
+    }
+  }
+
   struct Dependencies {
     var makeStore: () -> any ConfigCommandStore
     var makeIO: () -> any ConfigCommandIO
@@ -48,6 +62,12 @@ struct ConfigCommand: ParsableCommand {
 
   @Flag(name: .customLong("clear-quiet"), help: "Remove the stored quiet preference.")
   var clearQuiet: Bool = false
+
+  @Option(name: .long, help: "Set the default generation mode (automatic|per-file).")
+  var mode: GenerationModeOption?
+
+  @Flag(name: .customLong("clear-mode"), help: "Remove the stored generation mode preference.")
+  var clearMode: Bool = false
 
   func run() throws {
     try validateOptions()
@@ -97,6 +117,9 @@ struct ConfigCommand: ParsableCommand {
     if let verboseSetting = verbose, let quietSetting = quiet, verboseSetting && quietSetting {
       throw ValidationError("Cannot set both --verbose true and --quiet true.")
     }
+    if mode != nil && clearMode {
+      throw ValidationError("Cannot use --mode together with --clear-mode.")
+    }
   }
 
   private var shouldRunInteractively: Bool {
@@ -107,6 +130,8 @@ struct ConfigCommand: ParsableCommand {
       && !clearVerbose
       && quiet == nil
       && !clearQuiet
+      && mode == nil
+      && !clearMode
   }
 
   private func applyDirectUpdates(to configuration: inout UserConfiguration) -> Bool {
@@ -159,6 +184,27 @@ struct ConfigCommand: ParsableCommand {
       }
     }
 
+    if clearMode {
+      if configuration.defaultGenerationMode != nil {
+        configuration.defaultGenerationMode = nil
+        changed = true
+      }
+    }
+    if let modeSelection = mode?.mode {
+      switch modeSelection {
+      case .automatic:
+        if configuration.defaultGenerationMode != nil {
+          configuration.defaultGenerationMode = nil
+          changed = true
+        }
+      case .perFile:
+        if configuration.defaultGenerationMode != .perFile {
+          configuration.defaultGenerationMode = .perFile
+          changed = true
+        }
+      }
+    }
+
     return changed
   }
 
@@ -205,6 +251,23 @@ struct ConfigCommand: ParsableCommand {
         ),
         DisplayChoice(name: "verbose", isCurrent: isVerboseDefault),
         DisplayChoice(name: "quiet", isCurrent: isQuietDefault),
+      ],
+      theme: theme
+    )
+
+    let currentMode = configuration.defaultGenerationMode ?? .automatic
+    let automaticNote =
+      currentMode == .automatic && configuration.defaultGenerationMode == nil ? "(default)" : nil
+    printPreference(
+      title: "Generation mode",
+      choices: [
+        DisplayChoice(
+          name: "automatic",
+          isCurrent: currentMode == .automatic,
+          isRecommended: true,
+          note: automaticNote
+        ),
+        DisplayChoice(name: "per-file", isCurrent: currentMode == .perFile),
       ],
       theme: theme
     )
@@ -365,10 +428,22 @@ struct ConfigInteractiveEditor {
       }
     }
 
+    if let modeChoice = promptForGenerationMode(current: configuration.defaultGenerationMode) {
+      switch modeChoice {
+      case .automatic:
+        updated.defaultGenerationMode = nil
+      case .perFile:
+        updated.defaultGenerationMode = .perFile
+      case .clear:
+        updated.defaultGenerationMode = nil
+      }
+    }
+
     let changed =
       updated.autoStageIfNoStaged != original.autoStageIfNoStaged
       || updated.defaultVerbose != original.defaultVerbose
       || updated.defaultQuiet != original.defaultQuiet
+      || updated.defaultGenerationMode != original.defaultGenerationMode
 
     return (updated, changed)
   }
@@ -474,6 +549,61 @@ struct ConfigInteractiveEditor {
     )
   }
 
+  private func promptForGenerationMode(
+    current: CommitGenOptions.GenerationMode?
+  ) -> GenerationModeChoice? {
+    let currentMode = current ?? .automatic
+    let description: String = {
+      switch currentMode {
+      case .automatic:
+        return "automatic"
+      case .perFile:
+        return "per-file"
+      }
+    }()
+
+    let choices: [Choice<GenerationModeChoice>] = [
+      Choice(
+        label: "1",
+        tokens: ["1", "automatic", "auto", "a"],
+        description: "automatic",
+        value: .automatic,
+        isRecommended: true
+      ),
+      Choice(
+        label: "2",
+        tokens: ["2", "per-file", "perfile", "p"],
+        description: "per-file",
+        value: .perFile
+      ),
+      Choice(
+        label: "",
+        tokens: ["clear", "reset"],
+        description: "",
+        value: .clear,
+        isVisible: false
+      ),
+    ]
+
+    return promptChoice(
+      title: "Generation mode",
+      currentDescription: description,
+      choices: choices,
+      keepMessage: "Press Enter to keep current generation mode.",
+      isCurrent: { choiceValue in
+        switch (choiceValue, currentMode) {
+        case (.automatic, .automatic), (.perFile, .perFile):
+          return true
+        default:
+          return false
+        }
+      },
+      additionalInstructions: [
+        "Type 'clear' to remove the stored preference and fall back to automatic mode."
+      ]
+    )
+  }
+
   private func promptChoice<Value>(
     title: String,
     currentDescription: String,
@@ -544,5 +674,11 @@ struct ConfigInteractiveEditor {
     case standard
     case verbose
     case quiet
+  }
+
+  private enum GenerationModeChoice {
+    case automatic
+    case perFile
+    case clear
   }
 }

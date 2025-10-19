@@ -4,6 +4,7 @@ struct UserConfiguration: Codable {
   var autoStageIfNoStaged: Bool?
   var defaultVerbose: Bool?
   var defaultQuiet: Bool?
+  var defaultGenerationMode: CommitGenOptions.GenerationMode?
 }
 
 struct UserConfigurationStore {
