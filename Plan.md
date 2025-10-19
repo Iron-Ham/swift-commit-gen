@@ -16,6 +16,8 @@ Current Focus (October 2025)
 - Capture insights from TN3193: treat 4,096 tokens as the working ceiling, plan for multi-session strategies, and log when heuristics get close so we can react before `exceededContextWindowSize` fires.
 - Document how to validate token budgets using the Foundation Models Instruments profile run; bake those steps into our manual verification checklist.
 - Prepare heuristics to merge user-supplied annotations with existing prompts without duplicating repo metadata.
+- Design the LLM provider abstraction so we can add an OpenAI-compatible HTTP client that talks to local servers (Ollama, llama.cpp bridges, LM Studio) without changing existing call sites; defer streaming support for now.
+- Consider Linux/Windows support once we have an LLM provider abstraction.
 
 Phase 1: Project Foundations ✅
 ------------------------------
@@ -73,22 +75,6 @@ Phase 5: FoundationModels Integration 🔄
    - ✅ Surface actionable error message when the model is unavailable.
    - ⚪ Consider offline fallback prompt (e.g., reuse previous draft or instruct user) if model stays unavailable.
 
-Phase 6: CLI Experience 🔄
--------------------------
-1. ✅ Command flow
-   - ✅ Default invocation runs inspection → summarization → model call → preview.
-   - ✅ Default to staged changes only when generating drafts.
-   - ✅ Auto-commit accepted drafts by default (disable with `--no-commit`).
-2. 🔄 Interactive review
-   - ✅ Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
-   - ✅ Provide `--stage` to stage pending changes before drafting and run `git commit -F -` using the generated text when `--commit` is supplied.
-   - ✅ Surface a summary of changes that will be committed alongside the draft.
-   - ✅ Provide `r` (regenerate) and `c` (regenerate with context) options, reusing the current prompt package.
-   - ✅ Add ANSI theming so logs and summaries highlight paths, additions, deletions, and metadata.
-   - ✅ Add `--verbose` to opt into additional diagnostics and prompt-budget reporting.
-   - 🔄 Catch `LanguageModelSession.GenerationError.exceededContextWindowSize`, warn the user, and retry with a trimmed prompt or fresh session snapshot.
-3. ✅ Add `--print-json` for tooling integration (via `--format json`).
-
 Phase 5b: Prompt Budget & Batching 🚧
 -----------------------------------
 1. 🔄 Prompt heuristics
@@ -109,11 +95,42 @@ Phase 5b: Prompt Budget & Batching 🚧
    - 🔄 Implement fallback behavior when the combiner prompt nears the window (e.g., summarize partial subjects first or re-run with reduced context).
    - ✅ Revisit snippet truncation once batching is active: allow the planner to re-expand diff snippets (up to a generous hard cap that still fits a single file per batch) when spare token budget exists, and log which files get the “full” treatment versus compacted views.
 
-Phase 7: Configuration & Persistence
+Phase 5c: Alternate Model Providers 🚧
 ------------------------------------
-1. Read config file `.scg.toml/json`
-   - Options for default style, max diff lines, custom instructions, auto-stage toggle.
-2. Provide `--config` override path and environment variable support.
+1. 🔄 Add provider selection to `CommitGenOptions`
+   - 🔄 Expand `UserConfiguration` + CLI flags to choose between `foundationModels` (default) and `openAICompatible`.
+   - 🔄 Support environment overrides (`SCG_BASE_URL`, `SCG_MODEL`, `SCG_API_KEY`) for quick experimentation.
+2. 🔄 Implement `OpenAICompatibleClient`
+   - 🔄 Transform `PromptPackage` into chat-completions JSON and post to the configured base URL using `URLSession`.
+   - 🔄 Parse usage metadata when available; fall back to local token estimates when the router omits counts.
+   - 🔄 Handle network-level retries/timeouts mirroring the existing FoundationModels client.
+3. 🔄 Validation & docs
+   - 🔄 Add integration coverage with a mocked OpenAI endpoint plus a quickstart guide for running against Ollama or llama.cpp via their OpenAI-flavored routers.
+   - 🔄 Document limitations (no streaming yet, assumes OpenAI-compatible schema) and expand manual verification checklist accordingly.
+
+Phase 6: CLI Experience 🔄
+-------------------------
+1. ✅ Command flow
+   - ✅ Default invocation runs inspection → summarization → model call → preview.
+   - ✅ Default to staged changes only when generating drafts.
+   - ✅ Auto-commit accepted drafts by default (disable with `--no-commit`).
+2. 🔄 Interactive review
+   - ✅ Print proposed subject/body; offer `y` (accept), `e` (edit in `$EDITOR`), `n` (abort).
+   - ✅ Provide `--stage` to stage pending changes before drafting and run `git commit -F -` using the generated text when `--commit` is supplied.
+   - ✅ Surface a summary of changes that will be committed alongside the draft.
+   - ✅ Provide `r` (regenerate) and `c` (regenerate with context) options, reusing the current prompt package.
+   - ✅ Add ANSI theming so logs and summaries highlight paths, additions, deletions, and metadata.
+   - ✅ Add `--verbose` to opt into additional diagnostics and prompt-budget reporting.
+   - 🔄 Catch `LanguageModelSession.GenerationError.exceededContextWindowSize`, warn the user, and retry with a trimmed prompt or fresh session snapshot.
+3. ✅ Add `--print-json` for tooling integration (via `--format json`).
+
+Phase 7: Configuration & Persistence 🔄
+------------------------------------
+1. ✅ Read and write user configuration (`~/Library/Application Support/scg/config.json`).
+   - ✅ Manage defaults for auto-staging, verbosity, and generation mode via `scg config`.
+   - 🔄 Extend configuration to cover prompt style, diff limits, and custom instructions.
+2. 🔄 Provide `--config` override path and environment variable support.
+   - 🔄 Document precedence between CLI flags, environment variables, and stored defaults once added.
 
 Phase 8: Testing & Tooling
 --------------------------
