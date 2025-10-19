@@ -12,15 +12,13 @@ let package = Package(
     .executable(name: "scg", targets: ["SwiftCommitGen"])
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
-    .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
+    .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0")
   ],
   targets: [
     .executableTarget(
       name: "SwiftCommitGen",
       dependencies: [
-        .product(name: "ArgumentParser", package: "swift-argument-parser"),
-        .product(name: "OrderedCollections", package: "swift-collections"),
+        .product(name: "ArgumentParser", package: "swift-argument-parser")
       ],
       linkerSettings: [
         .linkedFramework("FoundationModels")
