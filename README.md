@@ -194,7 +194,7 @@ Available options:
 | `--quiet <true\|false>` | Set the default quiet logging preference. |
 | `--clear-quiet` | Remove the stored quiet preference. |
 
-When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/scg/config.json` (or the XDG config directory on non-macOS platforms).
+When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/scg/config.json`.
 
 ### Help
 
