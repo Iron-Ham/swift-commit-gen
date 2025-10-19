@@ -3,7 +3,7 @@ import ArgumentParser
 @main
 struct SwiftCommitGenCLI: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
-    commandName: "swiftcommitgen",
+    commandName: "scg",
     abstract: "Generate AI-assisted Git commit messages using Apple's on-device models.",
     version: "0.2.0",
     subcommands: [GenerateCommand.self, ConfigCommand.self],

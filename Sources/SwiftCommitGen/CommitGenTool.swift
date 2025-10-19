@@ -253,7 +253,7 @@ struct CommitGenTool {
     }
 
     let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "swiftcommitgen-\(UUID().uuidString).txt"
+      "scg-\(UUID().uuidString).txt"
     )
     defer { try? FileManager.default.removeItem(at: tempURL) }
 

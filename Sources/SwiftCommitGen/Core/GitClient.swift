@@ -193,7 +193,7 @@ struct SystemGitClient: GitClient {
     }
 
     let tempURL = fileManager.temporaryDirectory.appendingPathComponent(
-      "swiftcommitgen-\(UUID().uuidString).txt")
+      "scg-\(UUID().uuidString).txt")
     defer { try? fileManager.removeItem(at: tempURL) }
 
     try formatted.write(to: tempURL, atomically: true, encoding: .utf8)

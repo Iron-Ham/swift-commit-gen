@@ -4,12 +4,12 @@
 import PackageDescription
 
 let package = Package(
-  name: "SwiftCommitGen",
+  name: "scg",
   platforms: [
     .macOS(.v26)
   ],
   products: [
-    .executable(name: "swiftcommitgen", targets: ["SwiftCommitGen"])
+    .executable(name: "scg", targets: ["SwiftCommitGen"])
   ],
   dependencies: [
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),

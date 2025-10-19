@@ -25,7 +25,7 @@ struct ConfigCommand: ParsableCommand {
 
   static let configuration = CommandConfiguration(
     commandName: "config",
-    abstract: "View or update stored defaults for swiftcommitgen."
+    abstract: "View or update stored defaults for scg."
   )
 
   @Flag(name: .long, help: "Display the current configuration without making changes.")

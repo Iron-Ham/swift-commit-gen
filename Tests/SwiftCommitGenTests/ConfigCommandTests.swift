@@ -98,7 +98,7 @@ final class InMemoryConfigStore: ConfigCommandStore {
 
   init(
     initial: UserConfiguration = UserConfiguration(),
-    location: URL = URL(fileURLWithPath: "/tmp/swiftcommitgen-config.json")
+    location: URL = URL(fileURLWithPath: "/tmp/scg-config.json")
   ) {
     self.configuration = initial
     self.location = location

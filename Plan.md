@@ -1,5 +1,5 @@
-SwiftCommitGen Implementation Plan
-=================================
+scg Implementation Plan
+=======================
 
 Guiding Principles
 ------------------
@@ -111,7 +111,7 @@ Phase 5b: Prompt Budget & Batching 🚧
 
 Phase 7: Configuration & Persistence
 ------------------------------------
-1. Read config file `.swiftcommitgen.toml/json`
+1. Read config file `.scg.toml/json`
    - Options for default style, max diff lines, custom instructions, auto-stage toggle.
 2. Provide `--config` override path and environment variable support.
 

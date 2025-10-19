@@ -1,7 +1,7 @@
-SwiftCommitGen
-===============
+scg
+===
 
-SwiftCommitGen is a Swift-based command line tool that inspects your current Git repository, summarizes the staged and unstaged changes, and generates a commit message proposal with Apple's on-device generative model. The goal is to keep human-in-the-loop Git commits fast, consistent, and privacy-preserving by relying on system-provided AI capabilities instead of cloud services.
+scg is a Swift-based command line tool that inspects your current Git repository, summarizes the staged and unstaged changes, and generates a commit message proposal with Apple's on-device generative model. The goal is to keep human-in-the-loop Git commits fast, consistent, and privacy-preserving by relying on system-provided AI capabilities instead of cloud services.
 
 https://github.com/user-attachments/assets/499e7b11-86af-490f-bb4e-c49c65c58ecf
 
@@ -32,13 +32,13 @@ Installation
 
 ```sh
 brew tap Iron-Ham/swift-commit-gen
-brew install swiftcommitgen
+brew install scg
 ```
 
 Or install directly without tapping:
 
 ```sh
-brew install Iron-Ham/swift-commit-gen/swiftcommitgen
+brew install Iron-Ham/swift-commit-gen/scg
 ```
 
 ### Option 2: Install Script
@@ -63,7 +63,7 @@ git clone https://github.com/Iron-Ham/swift-commit-gen.git
 cd swift-commit-gen
 swift build -c release
 install -d "$HOME/.local/bin"
-install .build/release/swiftcommitgen "$HOME/.local/bin/"
+install .build/release/scg "$HOME/.local/bin/"
 ```
 
 Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile if needed.
@@ -71,20 +71,20 @@ Add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile if needed.
 First-Run Notes
 ---------------
 - The first invocation may prompt for Apple Intelligence access; approve the request in System Settings → Privacy & Security → Apple Intelligence.
-- If `swiftcommitgen` reports that the model is unavailable, ensure Apple Intelligence is enabled and the device satisfies the on-device requirements.
+- If `scg` reports that the model is unavailable, ensure Apple Intelligence is enabled and the device satisfies the on-device requirements.
 
 Usage
 -----
 From the root of a Git repository with pending changes:
 
 ```sh
-swift run swiftcommitgen generate
+swift run scg generate
 ```
 
 Or, after installation:
 
 ```sh
-swiftcommitgen generate
+scg generate
 ```
 
 ### Command
@@ -94,13 +94,13 @@ You can invoke the tool either with the explicit `generate` subcommand or omit i
 Primary (shorter) form:
 
 ```sh
-swiftcommitgen [OPTIONS]
+scg [OPTIONS]
 ```
 
 Equivalent explicit form:
 
 ```sh
-swiftcommitgen generate [OPTIONS]
+scg generate [OPTIONS]
 ```
 
 ### Generation Flow
@@ -140,31 +140,31 @@ Precedence: `--verbose` > `--quiet`. Supplying both yields verbose output.
 Generate and interactively accept a draft (default):
 
 ```sh
-swiftcommitgen
+scg
 ```
 
 Auto-commit the already staged changes:
 
 ```sh
-swiftcommitgen --commit
+scg --commit
 ```
 
 Stage everything first, then show verbose diagnostics:
 
 ```sh
-swiftcommitgen --stage --verbose
+scg --stage --verbose
 ```
 
 Minimal essential output (quiet mode) but still commit:
 
 ```sh
-swiftcommitgen --quiet --commit
+scg --quiet --commit
 ```
 
 Produce machine-readable JSON (no interactive loop):
 
 ```sh
-swiftcommitgen --format json
+scg --format json
 ```
 
 Configuration Defaults
@@ -172,7 +172,7 @@ Configuration Defaults
 Use the `config` subcommand to inspect or update stored defaults. Running it with no flags opens an interactive, colorized editor that walks through each preference:
 
 ```sh
-swiftcommitgen config
+scg config
 ```
 
 Available options:
@@ -187,18 +187,18 @@ Available options:
 | `--quiet <true\|false>` | Set the default quiet logging preference. |
 | `--clear-quiet` | Remove the stored quiet preference. |
 
-When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/swiftcommitgen/config.json` (or the XDG config directory on non-macOS platforms).
+When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/scg/config.json` (or the XDG config directory on non-macOS platforms).
 
 ### Help
 
 For a full list of commands:
 
 ```sh
-swiftcommitgen help # or swiftcommitgen -h
+scg help # or scg -h
 ```
 
 For help with a specific command, such as `generate`:
 
 ```sh
-swiftcommitgen help generate # or swiftcommitgen generate -h
+scg help generate # or scg generate -h
 ```

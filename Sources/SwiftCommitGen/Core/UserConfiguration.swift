@@ -59,7 +59,7 @@ struct UserConfigurationStore {
 
     return
       baseDirectory
-      .appendingPathComponent("swiftcommitgen", isDirectory: true)
+      .appendingPathComponent("scg", isDirectory: true)
       .appendingPathComponent("config.json", isDirectory: false)
   }
 }
