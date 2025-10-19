@@ -513,6 +513,18 @@ extension CommitGenTool {
       logPromptDiagnostics(generation.diagnostics)
       logger.debug("Batch \(batchNumber) partial subject: \(generation.draft.subject)")
 
+      let draftMessage = generation.draft.commitMessage
+      if draftMessage.isEmpty {
+        logger.debug("Batch \(batchNumber) draft content: (empty draft)")
+      } else {
+        logger.debug(
+          """
+          Batch \(batchNumber) draft content:
+          \(draftMessage)
+          """
+        )
+      }
+
       let partial = BatchPartialDraft(
         batchIndex: index,
         files: batch.files,

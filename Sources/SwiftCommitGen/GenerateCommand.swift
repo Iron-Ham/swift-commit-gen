@@ -21,30 +21,32 @@ struct GenerateCommand: AsyncParsableCommand {
   )
   var commit: Bool = true
 
-  @Flag(name: .long, help: "Stage all pending changes (including untracked) before generating.")
-  private var stageFlag: Bool = false
+  @Flag(
+    name: .long,
+    help: "Stage all pending changes (including untracked) before generating.")
+  private var stage: Bool = false
 
   @Flag(name: .customLong("no-stage"), help: "Disable staging even if enabled via configuration.")
-  private var noStageFlag: Bool = false
+  private var noStage: Bool = false
 
   @Flag(
     name: [.customShort("v"), .long],
     help: "Print additional diagnostics and prompt budgeting details (overrides --quiet)."
   )
-  private var verboseFlag: Bool = false
+  private var verbose: Bool = false
 
   @Flag(
     name: .customLong("no-verbose"), help: "Disable verbose output even if configured as default.")
-  private var noVerboseFlag: Bool = false
+  private var noVerbose: Bool = false
 
   @Flag(
     name: [.customShort("q"), .long],
     help: "Suppress routine info output (warnings/errors still shown). Ignored if --verbose is set."
   )
-  private var quietFlag: Bool = false
+  private var quiet: Bool = false
 
   @Flag(name: .customLong("no-quiet"), help: "Disable quiet mode even if configured as default.")
-  private var noQuietFlag: Bool = false
+  private var noQuiet: Bool = false
 
   func run() async throws {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
@@ -52,27 +54,27 @@ struct GenerateCommand: AsyncParsableCommand {
     let userConfig = (try? configStore.load()) ?? UserConfiguration()
 
     let stagePreference: Bool?
-    if stageFlag {
+    if stage {
       stagePreference = true
-    } else if noStageFlag {
+    } else if noStage {
       stagePreference = false
     } else {
       stagePreference = nil
     }
 
     let verbosePreference: Bool?
-    if verboseFlag {
+    if verbose {
       verbosePreference = true
-    } else if noVerboseFlag {
+    } else if noVerbose {
       verbosePreference = false
     } else {
       verbosePreference = nil
     }
 
     let quietPreference: Bool?
-    if quietFlag {
+    if quiet {
       quietPreference = true
-    } else if noQuietFlag {
+    } else if noQuiet {
       quietPreference = false
     } else {
       quietPreference = nil
