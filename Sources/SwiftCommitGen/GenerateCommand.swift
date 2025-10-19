@@ -48,6 +48,12 @@ struct GenerateCommand: AsyncParsableCommand {
   @Flag(name: .customLong("no-quiet"), help: "Disable quiet mode even if configured as default.")
   private var noQuiet: Bool = false
 
+  @Flag(
+    name: .customLong("single-file"),
+    help: "Process each file independently before combining the drafts into a single commit message."
+  )
+  private var singleFile: Bool = false
+
   func run() async throws {
     let outputFormat = CommitGenOptions.OutputFormat(rawValue: format.rawValue) ?? .text
     let configStore = UserConfigurationStore()
@@ -80,6 +86,8 @@ struct GenerateCommand: AsyncParsableCommand {
       quietPreference = nil
     }
 
+    let generationMode: CommitGenOptions.GenerationMode = singleFile ? .perFile : .automatic
+
     let autoCommit = commit
     let stageAllBeforeGenerating = stagePreference ?? false
     let resolvedVerbose = verbosePreference ?? userConfig.defaultVerbose ?? false
@@ -95,7 +103,8 @@ struct GenerateCommand: AsyncParsableCommand {
       stageAllBeforeGenerating: stageAllBeforeGenerating,
       autoStageIfNoStaged: autoStageIfNoStaged,
       isVerbose: resolvedVerbose,
-      isQuiet: effectiveQuiet
+      isQuiet: effectiveQuiet,
+      generationMode: generationMode
     )
 
     let tool = CommitGenTool(options: options)

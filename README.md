@@ -122,6 +122,7 @@ scg generate [OPTIONS]
 | `--no-verbose` |  | Force verbose output off, even if configured as default | - | Useful for scripts overriding stored settings. |
 | `--quiet` | `-q` | Suppress routine info lines | Off | Hides `[INFO]` but keeps `[NOTICE]`, warnings, errors. Ignored if `--verbose` is present. |
 | `--no-quiet` |  | Ensure quiet mode is disabled, even if configured | - | Helpful when scripts need full output. |
+| `--single-file` |  | Analyze each file independently and then combine per-file drafts | Off | Sends a larger diff slice per file, useful when you need high-fidelity summaries. |
 
 ### Verbosity Levels
 
@@ -165,6 +166,12 @@ Produce machine-readable JSON (no interactive loop):
 
 ```sh
 scg --format json
+```
+
+Request high-fidelity per-file drafts before they are combined:
+
+```sh
+scg --single-file
 ```
 
 Configuration Defaults

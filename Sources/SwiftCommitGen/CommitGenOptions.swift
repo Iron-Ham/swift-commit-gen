@@ -18,6 +18,11 @@ struct CommitGenOptions {
     }
   }
 
+  enum GenerationMode: String, Codable {
+    case automatic
+    case perFile
+  }
+
   var outputFormat: OutputFormat
   var promptStyle: PromptStyle
   var autoCommit: Bool
@@ -25,4 +30,5 @@ struct CommitGenOptions {
   var autoStageIfNoStaged: Bool
   var isVerbose: Bool
   var isQuiet: Bool
+  var generationMode: GenerationMode
 }

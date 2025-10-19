@@ -14,15 +14,46 @@ struct CommitGenTool {
     options: CommitGenOptions,
     gitClient: GitClient = SystemGitClient(),
     summarizer: DiffSummarizer? = nil,
-    promptBuilder: PromptBuilder = DefaultPromptBuilder(),
+    promptBuilder: PromptBuilder? = nil,
     llmClient: LLMClient = FoundationModelsClient(),
     renderer: Renderer = ConsoleRenderer(),
     logger: CommitGenLogger? = nil
   ) {
     self.options = options
     self.gitClient = gitClient
-    self.summarizer = summarizer ?? DefaultDiffSummarizer(gitClient: gitClient)
-    self.promptBuilder = promptBuilder
+
+    if let summarizer {
+      self.summarizer = summarizer
+    } else {
+      let perFileMode = options.generationMode == .perFile
+      let maxLines = perFileMode ? 200 : 80
+      let maxFullLines = perFileMode ? 400 : 200
+      self.summarizer = DefaultDiffSummarizer(
+        gitClient: gitClient,
+        maxLinesPerFile: maxLines,
+        maxFullLinesPerFile: maxFullLines
+      )
+    }
+
+    if let promptBuilder {
+      self.promptBuilder = promptBuilder
+    } else if options.generationMode == .perFile {
+      self.promptBuilder = DefaultPromptBuilder(
+        maxFiles: 1,
+        maxSnippetLines: 200,
+        maxPromptLineEstimate: 800,
+        minFiles: 1,
+        minSnippetLines: 0,
+        snippetReductionStep: 10,
+        hintThreshold: 0,
+        mediumFileThreshold: Int.max,
+        highFileThreshold: Int.max,
+        mediumSnippetLimit: 200,
+        lowSnippetLimit: 200
+      )
+    } else {
+      self.promptBuilder = DefaultPromptBuilder()
+    }
     self.llmClient = llmClient
     self.renderer = renderer
     self.logger = logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
@@ -100,19 +131,32 @@ struct CommitGenTool {
       renderReviewSummary(summary)
     }
 
-    let planner = PromptBatchPlanner()
-    let batches = planner.planBatches(for: summary)
-    let useBatching = shouldUseBatching(for: batches)
-
     let outcome: GenerationOutcome
-    if useBatching {
+    switch options.generationMode {
+    case .perFile:
+      logger.notice(
+        "Single-file analysis enabled; generating individual drafts for each staged file."
+      )
+      let perFileBatches = makeSingleFileBatches(from: summary)
       outcome = try await generateBatchedDraft(
-        batches: batches,
+        batches: perFileBatches,
         metadata: metadata,
         fullSummary: summary
       )
-    } else {
-      outcome = try await generateSingleDraft(summary: summary, metadata: metadata)
+    case .automatic:
+      let planner = PromptBatchPlanner()
+      let batches = planner.planBatches(for: summary)
+      let useBatching = shouldUseBatching(for: batches)
+
+      if useBatching {
+        outcome = try await generateBatchedDraft(
+          batches: batches,
+          metadata: metadata,
+          fullSummary: summary
+        )
+      } else {
+        outcome = try await generateSingleDraft(summary: summary, metadata: metadata)
+      }
     }
 
     var draft = outcome.draft
@@ -447,6 +491,44 @@ extension CommitGenTool {
       return true
     }
     return batches.first?.exceedsBudget ?? false
+  }
+
+  private func makeSingleFileBatches(from summary: ChangeSummary) -> [PromptBatch] {
+    guard !summary.files.isEmpty else { return [] }
+
+    let tokenBudget = 4_096
+    let headroomRatio = 0.15
+    let targetBudget = max(1, Int(Double(tokenBudget) * (1.0 - headroomRatio)))
+
+    return summary.files.map { file in
+      var fullFile = file
+      fullFile.applySnippetMode(.full)
+
+      let lines = fullFile.promptLines()
+      let characterCount = lines.reduce(0) { partial, line in
+        partial + line.count + 1
+      }
+      let tokenEstimate = PromptDiagnostics.tokenEstimate(forCharacterCount: characterCount)
+      let usage = PromptDiagnostics.FileUsage(
+        path: fullFile.path,
+        kind: fullFile.kind.description,
+        location: fullFile.location,
+        lineCount: lines.count,
+        tokenEstimate: tokenEstimate,
+        isGenerated: fullFile.isGenerated,
+        isBinary: fullFile.isBinary,
+        snippetTruncated: fullFile.snippetTruncated,
+        usedFullSnippet: fullFile.snippetMode == .full
+      )
+
+      return PromptBatch(
+        files: [fullFile],
+        tokenEstimate: tokenEstimate,
+        lineEstimate: lines.count,
+        fileUsages: [usage],
+        exceedsBudget: tokenEstimate > targetBudget
+      )
+    }
   }
 
   fileprivate func generateSingleDraft(
