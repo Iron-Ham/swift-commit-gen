@@ -11,10 +11,11 @@ protocol LLMClient {
 struct CommitDraft: Hashable, Codable, Sendable {
   @Guide(
     description:
-      "The title of a commit. It should be no longer than 50 characters and should summarize the contents of the chaneset for other developers reading the commit history."
+      "The title of a commit. It should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history. It should describe WHAT was changed."
   )
   var subject: String
-  @Guide(description: "A detailed description of the the purposes of the changes.")
+
+  @Guide(description: "A detailed description of the the purposes of the changes. It should describe WHY the changes were made.")
   var body: String?
 
   init(subject: String = "", body: String? = nil) {
