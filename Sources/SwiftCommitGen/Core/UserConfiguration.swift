@@ -1,5 +1,6 @@
 import Foundation
 
+/// Persisted defaults chosen by the user for the `generate` command.
 struct UserConfiguration: Codable {
   var autoStageIfNoStaged: Bool?
   var defaultVerbose: Bool?
@@ -7,6 +8,7 @@ struct UserConfiguration: Codable {
   var defaultGenerationMode: CommitGenOptions.GenerationMode?
 }
 
+/// File-backed storage for loading and saving `UserConfiguration` values.
 struct UserConfigurationStore {
   private let fileManager: FileManager
   private let configurationURL: URL
@@ -52,7 +54,9 @@ struct UserConfigurationStore {
       let home = fileManager.homeDirectoryForCurrentUser
       #if os(macOS)
         baseDirectory = home.appendingPathComponent(
-          "Library/Application Support", isDirectory: true)
+          "Library/Application Support",
+          isDirectory: true
+        )
       #else
         baseDirectory = home.appendingPathComponent(".config", isDirectory: true)
       #endif

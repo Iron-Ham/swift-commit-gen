@@ -49,11 +49,23 @@ struct DiffSummarizerTests {
   @Test("Ignores unstaged and untracked changes")
   func ignoresUnstagedAndUntracked() async throws {
     let staged = GitFileChange(
-      path: "Sources/App/Staged.swift", oldPath: nil, kind: .modified, location: .staged)
+      path: "Sources/App/Staged.swift",
+      oldPath: nil,
+      kind: .modified,
+      location: .staged
+    )
     let unstaged = GitFileChange(
-      path: "Sources/App/Working.swift", oldPath: nil, kind: .modified, location: .unstaged)
+      path: "Sources/App/Working.swift",
+      oldPath: nil,
+      kind: .modified,
+      location: .unstaged
+    )
     let untracked = GitFileChange(
-      path: "Docs/Notes.md", oldPath: nil, kind: .untracked, location: .untracked)
+      path: "Docs/Notes.md",
+      oldPath: nil,
+      kind: .untracked,
+      location: .untracked
+    )
 
     let status = GitStatus(staged: [staged], unstaged: [unstaged], untracked: [untracked])
 

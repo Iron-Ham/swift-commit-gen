@@ -1,5 +1,6 @@
 import Foundation
 
+/// Tracks the top-level failure cases that can surface during commit generation.
 enum CommitGenError: Error {
   case gitRepositoryUnavailable
   case gitCommandFailed(message: String)

@@ -8,6 +8,7 @@ import Foundation
 #endif
 
 struct ConfigCommand: ParsableCommand {
+  /// User-facing generation modes exposed as CLI arguments.
   enum GenerationModeOption: String, ExpressibleByArgument, Codable {
     case automatic
     case perFile = "per-file"
@@ -22,6 +23,7 @@ struct ConfigCommand: ParsableCommand {
     }
   }
 
+  /// Factored constructors for dependencies that make the command easy to test.
   struct Dependencies {
     var makeStore: () -> any ConfigCommandStore
     var makeIO: () -> any ConfigCommandIO
@@ -69,6 +71,7 @@ struct ConfigCommand: ParsableCommand {
   @Flag(name: .customLong("clear-mode"), help: "Remove the stored generation mode preference.")
   var clearMode: Bool = false
 
+  /// Runs the `scg config` subcommand either interactively or via direct flag updates.
   func run() throws {
     try validateOptions()
     let dependencies = ConfigCommand.resolveDependencies()
@@ -104,6 +107,7 @@ struct ConfigCommand: ParsableCommand {
     }
   }
 
+  /// Ensures mutually exclusive flags are not provided together.
   private func validateOptions() throws {
     if autoStageIfClean != nil && clearAutoStage {
       throw ValidationError("Cannot use --auto-stage-if-clean together with --clear-auto-stage.")
@@ -122,6 +126,7 @@ struct ConfigCommand: ParsableCommand {
     }
   }
 
+  /// Returns true when the command should launch the interactive editor.
   private var shouldRunInteractively: Bool {
     !show
       && autoStageIfClean == nil
@@ -134,6 +139,7 @@ struct ConfigCommand: ParsableCommand {
       && !clearMode
   }
 
+  /// Applies configuration updates coming from explicit CLI flags.
   private func applyDirectUpdates(to configuration: inout UserConfiguration) -> Bool {
     var changed = false
 
@@ -208,6 +214,7 @@ struct ConfigCommand: ParsableCommand {
     return changed
   }
 
+  /// Prints the resolved configuration using the themed console output.
   private func printConfiguration(
     _ configuration: UserConfiguration,
     location: URL,
@@ -281,6 +288,7 @@ private struct DisplayChoice {
   var note: String?
 }
 
+/// Renders a preference section with highlighted defaults in the CLI output.
 private func printPreference(title: String, choices: [DisplayChoice], theme: ConsoleTheme) {
   print(theme.applying(theme.emphasis, to: "\(title):"))
   for choice in choices {
@@ -309,8 +317,10 @@ private enum ConfigCommandDependencyContext {
 }
 
 extension ConfigCommand {
+  /// Executes a closure with injected dependencies, reverting afterward.
   static func withDependencies<Result>(
-    _ dependencies: Dependencies, run operation: () throws -> Result
+    _ dependencies: Dependencies,
+    run operation: () throws -> Result
   )
     rethrows -> Result
   {
@@ -319,6 +329,7 @@ extension ConfigCommand {
     }
   }
 
+  /// Resolves the active dependency factory set for the current context.
   static func resolveDependencies() -> Dependencies {
     ConfigCommandDependencyContext.override ?? Dependencies()
   }
@@ -326,12 +337,14 @@ extension ConfigCommand {
 
 extension ConfigCommand.Dependencies: @unchecked Sendable {}
 
+/// Abstracts persistence for user configuration preferences.
 protocol ConfigCommandStore {
   func load() throws -> UserConfiguration
   func save(_ configuration: UserConfiguration) throws
   func configurationLocation() -> URL
 }
 
+/// Type-erased adapter that allows swapping the underlying configuration store in tests.
 struct UserConfigurationStoreAdapter: ConfigCommandStore {
   private let store: UserConfigurationStore
 
@@ -352,12 +365,14 @@ struct UserConfigurationStoreAdapter: ConfigCommandStore {
   }
 }
 
+/// Contract for emitting prompts and capturing responses during interactive editing.
 protocol ConfigCommandIO: AnyObject {
   var isInteractive: Bool { get }
   func printLine(_ text: String)
   func prompt(_ text: String) -> String?
 }
 
+/// Default terminal-backed I/O implementation used by the config command.
 final class TerminalConfigCommandIO: ConfigCommandIO {
   var isInteractive: Bool {
     #if canImport(Darwin)
@@ -379,6 +394,7 @@ final class TerminalConfigCommandIO: ConfigCommandIO {
   }
 }
 
+/// Interactive editor that walks users through updating stored configuration values.
 struct ConfigInteractiveEditor {
   private let io: any ConfigCommandIO
   private let theme: ConsoleTheme
@@ -448,6 +464,7 @@ struct ConfigInteractiveEditor {
     return (updated, changed)
   }
 
+  /// Presents a numbered menu for toggling the auto-stage preference.
   private func promptForAutoStage(current: Bool?) -> AutoStageChoice? {
     let currentDescription: String
     switch current {
@@ -501,6 +518,7 @@ struct ConfigInteractiveEditor {
     )
   }
 
+  /// Presents a numbered menu for selecting verbosity defaults.
   private func promptForVerbosity(defaultVerbose: Bool?, defaultQuiet: Bool?) -> VerbosityChoice? {
     let currentChoice: VerbosityChoice
     if defaultVerbose == true {
@@ -549,6 +567,7 @@ struct ConfigInteractiveEditor {
     )
   }
 
+  /// Presents a numbered menu for choosing the default generation mode.
   private func promptForGenerationMode(
     current: CommitGenOptions.GenerationMode?
   ) -> GenerationModeChoice? {
@@ -604,6 +623,7 @@ struct ConfigInteractiveEditor {
     )
   }
 
+  /// Shared helper that renders choice menus and normalizes user input.
   private func promptChoice<Value>(
     title: String,
     currentDescription: String,

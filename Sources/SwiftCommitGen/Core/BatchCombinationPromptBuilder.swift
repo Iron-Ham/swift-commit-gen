@@ -1,7 +1,9 @@
 import Foundation
 import FoundationModels
 
+/// Builds the prompt used to merge per-batch drafts into a single commit message.
 struct BatchCombinationPromptBuilder {
+  /// Combines partial drafts alongside metadata so the model can assemble a cohesive commit.
   func makePrompt(metadata: PromptMetadata, partials: [BatchPartialDraft]) -> PromptPackage {
     precondition(!partials.isEmpty, "Expected at least one partial draft to combine")
 
@@ -103,6 +105,9 @@ struct BatchCombinationPromptBuilder {
     )
 
     return PromptPackage(
-      systemPrompt: systemPrompt, userPrompt: userPrompt, diagnostics: diagnostics)
+      systemPrompt: systemPrompt,
+      userPrompt: userPrompt,
+      diagnostics: diagnostics
+    )
   }
 }

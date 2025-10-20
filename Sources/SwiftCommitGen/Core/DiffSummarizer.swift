@@ -1,7 +1,9 @@
 import Foundation
 import FoundationModels
 
+/// Represents the staged changes that will be summarized for prompt construction.
 struct ChangeSummary: Hashable, Codable, PromptRepresentable {
+  /// Describes how a single file contributes to the change summary and prompt content.
   struct FileSummary: Hashable, Codable, PromptRepresentable {
     enum SnippetMode: String, Codable {
       case compact
@@ -219,10 +221,12 @@ extension ChangeSummary {
   }
 }
 
+/// Contract for turning raw Git status information into prompt-ready summaries.
 protocol DiffSummarizer {
   func summarize(status: GitStatus) async throws -> ChangeSummary
 }
 
+/// Default implementation that shells out to Git and trims diffs to manageable snippets.
 struct DefaultDiffSummarizer: DiffSummarizer {
   private let gitClient: GitClient
   private let maxLinesPerFile: Int

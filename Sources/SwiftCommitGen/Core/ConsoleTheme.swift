@@ -6,7 +6,9 @@ import Foundation
   import Glibc
 #endif
 
+/// Provides ANSI-aware styling helpers for console output.
 struct ConsoleTheme {
+  /// ANSI escape sequence configuration for a specific piece of text.
   struct Style {
     var codes: [Int]
 
@@ -51,6 +53,7 @@ struct ConsoleTheme {
   var metadata: Style
   var commitSubject: Style
 
+  /// Detects whether color output should be enabled and builds a theme for the target stream.
   static func resolve(
     stream: Stream,
     environment: [String: String] = ProcessInfo.processInfo.environment

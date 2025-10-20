@@ -1,11 +1,13 @@
 import Foundation
 import FoundationModels
 
+/// Abstraction over the on-device language model that generates commit drafts.
 protocol LLMClient {
   func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult
 }
 
 @Generable(description: "A commit for changes made in a git repository.")
+/// Model representation for the subject/body pair returned by the language model.
 struct CommitDraft: Hashable, Codable, Sendable {
   @Guide(
     description:
@@ -62,12 +64,15 @@ struct CommitDraft: Hashable, Codable, Sendable {
   }
 }
 
+/// Wraps a generated draft alongside diagnostics gathered during inference.
 struct LLMGenerationResult: Sendable {
   var draft: CommitDraft
   var diagnostics: PromptDiagnostics
 }
 
+/// Concrete LLM client backed by Apple's FoundationModels framework.
 struct FoundationModelsClient: LLMClient {
+  /// Controls retry behavior and timeouts for generation requests.
   struct Configuration {
     var maxAttempts: Int
     var requestTimeout: TimeInterval
@@ -113,7 +118,8 @@ struct FoundationModelsClient: LLMClient {
 
     var diagnostics = prompt.diagnostics
     let response = try await session.respond(
-      generating: CommitDraft.self, options: generationOptions
+      generating: CommitDraft.self,
+      options: generationOptions
     ) {
       prompt.userPrompt
     }

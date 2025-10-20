@@ -1,17 +1,20 @@
 import Foundation
 
+/// Indicates which staging area slice a Git query should inspect.
 enum GitChangeScope: Hashable, Codable {
   case staged
   case unstaged
   case all
 }
 
+/// Represents the staging state for a single changed file.
 enum GitChangeLocation: Hashable, Codable {
   case staged
   case unstaged
   case untracked
 }
 
+/// Categorizes the type of change reported by Git status output.
 enum GitChangeKind: String, Hashable, Codable {
   case added = "A"
   case modified = "M"
@@ -70,6 +73,7 @@ enum GitChangeKind: String, Hashable, Codable {
   }
 }
 
+/// Snapshot of a file-level change derived from `git status` output.
 struct GitFileChange {
   var path: String
   var oldPath: String?
@@ -89,6 +93,7 @@ struct GitFileChange {
   }
 }
 
+/// Aggregated staging information for the repository.
 struct GitStatus {
   var staged: [GitFileChange] = []
   var unstaged: [GitFileChange] = []
@@ -110,6 +115,7 @@ struct GitStatus {
   }
 }
 
+/// Minimal surface area required to interrogate Git for commit generation.
 protocol GitClient {
   func repositoryRoot() async throws -> URL
   func status() async throws -> GitStatus
@@ -123,6 +129,7 @@ protocol GitClient {
   func generatedFileHints(for paths: [String]) async throws -> [String: Bool]
 }
 
+/// Shell-based Git client that proxies calls through `/usr/bin/env git`.
 struct SystemGitClient: GitClient {
   private let fileManager: FileManager
   private let workingDirectory: URL
@@ -193,7 +200,8 @@ struct SystemGitClient: GitClient {
     }
 
     let tempURL = fileManager.temporaryDirectory.appendingPathComponent(
-      "scg-\(UUID().uuidString).txt")
+      "scg-\(UUID().uuidString).txt"
+    )
     defer { try? fileManager.removeItem(at: tempURL) }
 
     try formatted.write(to: tempURL, atomically: true, encoding: .utf8)

@@ -1,5 +1,6 @@
 import Foundation
 
+/// Renders generated drafts into a presentation format for the user.
 protocol Renderer {
   func render(
     _ draft: CommitDraft,
@@ -8,6 +9,7 @@ protocol Renderer {
   )
 }
 
+/// Console implementation that prints either human-readable text or JSON payloads.
 struct ConsoleRenderer: Renderer {
   private let theme: ConsoleTheme
 

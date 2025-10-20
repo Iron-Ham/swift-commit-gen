@@ -1,5 +1,6 @@
 import FoundationModels
 
+/// High-level context that accompanies the diff when constructing model prompts.
 struct PromptMetadata: PromptRepresentable {
   var repositoryName: String
   var branchName: String
@@ -32,10 +33,12 @@ struct PromptMetadata: PromptRepresentable {
   }
 }
 
+/// Produces the system and user prompts that will be sent to the language model.
 protocol PromptBuilder {
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage
 }
 
+/// Tracks prompt budgeting metrics so callers can understand model usage.
 struct PromptDiagnostics: Codable, Sendable {
   struct KindCount: Codable, Hashable, Sendable {
     var kind: String
@@ -123,6 +126,7 @@ struct PromptDiagnostics: Codable, Sendable {
   }
 }
 
+/// Bundles the full prompt payload and derived diagnostics for a generation request.
 struct PromptPackage {
   var systemPrompt: Instructions
   var userPrompt: Prompt
@@ -163,6 +167,7 @@ struct PromptPackage {
   }
 }
 
+/// Default prompt builder that balances snippet detail against token constraints.
 struct DefaultPromptBuilder: PromptBuilder {
   private let maxFiles: Int
   private let maxSnippetLines: Int
@@ -588,7 +593,8 @@ private func estimateTokenCount(
 
   if isCompacted {
     addLine(
-      "Context trimmed to stay within the model window; prioritize the most impactful changes.")
+      "Context trimmed to stay within the model window; prioritize the most impactful changes."
+    )
   }
 
   if remainder.count > 0 {
@@ -628,7 +634,9 @@ private func estimateTokenCount(
   let approximateCharactersPerToken = 4
   guard characterCount > 0 else { return 0 }
   return max(
-    1, (characterCount + (approximateCharactersPerToken - 1)) / approximateCharactersPerToken)
+    1,
+    (characterCount + (approximateCharactersPerToken - 1)) / approximateCharactersPerToken
+  )
 }
 
 private func locationDescription(_ location: GitChangeLocation) -> String {

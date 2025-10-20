@@ -1,5 +1,6 @@
 import Foundation
 
+/// Handles leveled logging with ANSI styling tailored to CLI usage.
 struct CommitGenLogger {
   enum Level: String {
     case debug

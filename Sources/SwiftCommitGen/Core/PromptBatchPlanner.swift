@@ -1,5 +1,6 @@
 import Foundation
 
+/// Represents a slice of files that will be summarized together in a single prompt.
 struct PromptBatch: Sendable {
   var files: [ChangeSummary.FileSummary]
   var tokenEstimate: Int
@@ -8,6 +9,7 @@ struct PromptBatch: Sendable {
   var exceedsBudget: Bool
 }
 
+/// Captures the draft and diagnostics generated for a specific batch.
 struct BatchPartialDraft: Sendable {
   var batchIndex: Int
   var files: [ChangeSummary.FileSummary]
@@ -15,6 +17,7 @@ struct BatchPartialDraft: Sendable {
   var diagnostics: PromptDiagnostics
 }
 
+/// Decides how to partition large change sets into prompt-sized batches.
 struct PromptBatchPlanner {
   var tokenBudget: Int
   var headroomRatio: Double
@@ -26,6 +29,7 @@ struct PromptBatchPlanner {
     self.minimumBatchSize = max(1, minimumBatchSize)
   }
 
+  /// Computes prompt batches sized to stay within the configured token budget.
   func planBatches(for summary: ChangeSummary) -> [PromptBatch] {
     guard !summary.files.isEmpty else { return [] }
 

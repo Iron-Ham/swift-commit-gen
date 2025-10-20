@@ -1,5 +1,7 @@
 import Foundation
 
+/// Coordinates the end-to-end flow for generating, reviewing, and optionally
+/// applying an AI-assisted commit message.
 struct CommitGenTool {
   private let options: CommitGenOptions
   private let gitClient: GitClient
@@ -10,6 +12,7 @@ struct CommitGenTool {
   private let logger: CommitGenLogger
   private let consoleTheme: ConsoleTheme
 
+  /// Creates a tool instance with configurable collaborators for easier testing.
   init(
     options: CommitGenOptions,
     gitClient: GitClient = SystemGitClient(),
@@ -60,6 +63,8 @@ struct CommitGenTool {
     self.consoleTheme = self.logger.consoleTheme
   }
 
+  /// Executes the commit generation pipeline from Git inspection to
+  /// interactive review and optional commit application.
   func run() async throws {
     let repoRoot = try await gitClient.repositoryRoot()
     logger.info("Repository root: \(repoRoot.path)")
@@ -217,6 +222,7 @@ struct CommitGenTool {
     return candidate.isEmpty ? url.path : candidate
   }
 
+  /// Presents the interactive review loop and returns the accepted draft, if any.
   private func reviewDraft(
     initialDraft: CommitDraft,
     regenerate: @escaping (_ additionalContext: String?) async throws -> CommitDraft
@@ -261,6 +267,7 @@ struct CommitGenTool {
     return nil
   }
 
+  /// Prompts the user on stderr and collects a lowercased response from stdin.
   private func promptUser(_ prompt: String) -> String? {
     if let data = prompt.data(using: .utf8) {
       FileHandle.standardError.write(data)
@@ -272,9 +279,11 @@ struct CommitGenTool {
     return line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
   }
 
+  /// Captures multiline user context for regeneration until a blank line or EOF.
   private func promptForAdditionalContext() -> String? {
     logger.info(
-      "Enter additional context for the next draft (blank line to finish, Ctrl+D to cancel):")
+      "Enter additional context for the next draft (blank line to finish, Ctrl+D to cancel):"
+    )
 
     var lines: [String] = []
     while let line = readLine() {
@@ -289,6 +298,7 @@ struct CommitGenTool {
     return combined.isEmpty ? nil : combined
   }
 
+  /// Opens the current draft in `$EDITOR` and returns the modified version when available.
   private func editDraft(_ draft: CommitDraft) throws -> CommitDraft? {
     let environment = ProcessInfo.processInfo.environment
     guard let editor = environment["EDITOR"], !editor.isEmpty else {
@@ -339,6 +349,7 @@ struct CommitGenTool {
     return updatedDraft
   }
 
+  /// Applies the accepted draft or prints follow-up instructions based on options.
   private func handleAcceptedDraft(
     _ draft: CommitDraft
   ) async throws {
@@ -355,6 +366,7 @@ struct CommitGenTool {
     logger.notice("Git commit created successfully.")
   }
 
+  /// Emits a human-readable summary of the staged files before prompt generation.
   private func renderReviewSummary(_ summary: ChangeSummary) {
     guard !summary.files.isEmpty else { return }
     logger.notice("Reviewing \(summary.fileCount) file(s):")
@@ -373,6 +385,7 @@ struct CommitGenTool {
     }
   }
 
+  /// Logs prompt budgeting diagnostics when verbose logging is enabled.
   private func logPromptDiagnostics(_ diagnostics: PromptDiagnostics) {
     guard logger.isVerboseEnabled else { return }
     let lineUsage = "\(diagnostics.estimatedLineCount)/\(diagnostics.lineBudget)"
@@ -478,6 +491,7 @@ struct CommitGenTool {
 }
 
 extension CommitGenTool {
+  /// Captures the artifacts produced during a generation request.
   fileprivate struct GenerationOutcome {
     var draft: CommitDraft
     var promptPackage: PromptPackage
@@ -485,6 +499,7 @@ extension CommitGenTool {
     var report: GenerationReport?
   }
 
+  /// Determines whether multi-batch prompting is required for the change set.
   fileprivate func shouldUseBatching(for batches: [PromptBatch]) -> Bool {
     guard !batches.isEmpty else { return false }
     if batches.count > 1 {
@@ -493,6 +508,7 @@ extension CommitGenTool {
     return batches.first?.exceedsBudget ?? false
   }
 
+  /// Builds single-file prompt batches when the per-file mode is active.
   private func makeSingleFileBatches(from summary: ChangeSummary) -> [PromptBatch] {
     guard !summary.files.isEmpty else { return [] }
 
@@ -531,8 +547,10 @@ extension CommitGenTool {
     }
   }
 
+  /// Generates a draft using a single prompt for the entire change summary.
   fileprivate func generateSingleDraft(
-    summary: ChangeSummary, metadata: PromptMetadata
+    summary: ChangeSummary,
+    metadata: PromptMetadata
   ) async throws -> GenerationOutcome {
     let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
     logPromptDiagnostics(promptPackage.diagnostics)
@@ -553,6 +571,7 @@ extension CommitGenTool {
     )
   }
 
+  /// Generates partial drafts for each batch and combines them into a unified message.
   fileprivate func generateBatchedDraft(
     batches: [PromptBatch],
     metadata: PromptMetadata,
@@ -631,7 +650,9 @@ extension CommitGenTool {
 
     let combinationBuilder = BatchCombinationPromptBuilder()
     let combinationPrompt = combinationBuilder.makePrompt(
-      metadata: metadata, partials: sortedPartials)
+      metadata: metadata,
+      partials: sortedPartials
+    )
     logPromptDiagnostics(combinationPrompt.diagnostics)
 
     logger.info("Combining \(partialDrafts.count) partial draft(s) into a unified commit message…")

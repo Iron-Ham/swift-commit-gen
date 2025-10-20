@@ -129,7 +129,8 @@ struct BatchCombinationPromptBuilderTests {
       location: .staged,
       lineCount: max(1, additions + deletions),
       tokenEstimate: PromptDiagnostics.tokenEstimate(
-        forCharacterCount: max(1, additions + deletions) * 40),
+        forCharacterCount: max(1, additions + deletions) * 40
+      ),
       isGenerated: isGenerated,
       isBinary: false,
       snippetTruncated: false,
