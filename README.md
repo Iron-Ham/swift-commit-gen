@@ -19,7 +19,7 @@ The CLI currently supports end-to-end commit generation, including Git inspectio
 
 Prerequisites
 -------------
-- macOS 26 (Sequoia) or later with the Apple Intelligence feature set enabled
+- macOS Tahoe (26) or later with the Apple Intelligence feature set enabled
 - Xcode 26 (or newer) with the command line tools installed (`xcode-select --install`)
 - Swift 6 toolchain (ships with Xcode 26)
 - Git 2.40+ available on `PATH`
