@@ -29,8 +29,8 @@ struct CommitGenTool {
       self.summarizer = summarizer
     } else {
       let perFileMode = options.generationMode == .perFile
-      let maxLines = perFileMode ? 200 : 80
-      let maxFullLines = perFileMode ? 400 : 200
+      let maxLines = perFileMode ? 500 : 300 // 200 : 80
+      let maxFullLines = perFileMode ? 1000 : 500  // 400 : 200
       self.summarizer = DefaultDiffSummarizer(
         gitClient: gitClient,
         maxLinesPerFile: maxLines,
@@ -65,7 +65,9 @@ struct CommitGenTool {
       case .ollama(let model, let baseURL):
         let config = OllamaClient.Configuration(
           model: model,
-          baseURL: baseURL
+          baseURL: baseURL,
+          logger: logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
+
         )
         self.llmClient = OllamaClient(configuration: config)
       #if canImport(FoundationModels)

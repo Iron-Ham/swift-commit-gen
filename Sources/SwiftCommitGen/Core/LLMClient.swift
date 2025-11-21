@@ -245,17 +245,20 @@ struct OllamaClient: LLMClient {
     var baseURL: String
     var temperature: Double
     var maxTokens: Int
+    var logger: CommitGenLogger? 
     
     init(
       model: String = "llama3.2",
       baseURL: String = "http://localhost:11434",
       temperature: Double = 0.3,
-      maxTokens: Int = 512
+      maxTokens: Int = 512,
+      logger: CommitGenLogger? = nil
     ) {
       self.model = model
       self.baseURL = baseURL
       self.temperature = temperature
       self.maxTokens = maxTokens
+      self.logger = logger
     }
   }
   
@@ -304,6 +307,19 @@ struct OllamaClient: LLMClient {
       ]
     ]
     
+    // Log the request if verbose logging is enabled
+    configuration.logger?.debug {
+      let systemPreview = prompt.systemPrompt.content.prefix(200)
+      let userPreview = prompt.userPrompt.content.prefix(800)
+      return """
+      📤 Ollama Request to \(configuration.model):
+      ┌─ System Prompt (first 200 chars):
+      │ \(systemPreview)...
+      └─ User Prompt (first 800 chars):
+        \(userPreview)...
+      """
+    }
+    
     request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
     
     let (data, response) = try await URLSession.shared.data(for: request)
@@ -324,6 +340,11 @@ struct OllamaClient: LLMClient {
     guard let message = json?["message"] as? [String: Any],
           let responseText = message["content"] as? String else {
       throw CommitGenError.llmRequestFailed(reason: "No message content in Ollama response")
+    }
+    
+    // Log the response if verbose logging is enabled
+    configuration.logger?.debug {
+      "📥 Ollama Response: \(responseText.prefix(500))..."
     }
     
     // Parse the JSON response from the model
