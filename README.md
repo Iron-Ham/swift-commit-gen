@@ -202,7 +202,19 @@ scg --llm-provider ollama
 Use a specific Ollama model:
 
 ```sh
-scg --llm-provider ollama --ollama-model codellama
+scg --llm-provider ollama --ollama-model codellama:13b
+```
+
+List available Ollama models:
+
+```sh
+scg config --list-ollama-models
+```
+
+Interactively configure your preferences (including Ollama model selection):
+
+```sh
+scg config
 ```
 
 Configuration Defaults
@@ -213,25 +225,35 @@ Use the `config` subcommand to inspect or update stored defaults. Running it wit
 scg config
 ```
 
-Available options:
+The interactive editor will guide you through:
+1. **Auto-stage preference**: Whether to automatically stage files when nothing is staged
+2. **Default verbosity**: Choose between standard, verbose, or quiet output
+3. **Generation mode**: Select automatic or per-file analysis
+4. **LLM Provider**: Choose between FoundationModels (macOS 26+) or Ollama (macOS 15+)
+5. **Ollama Model** (if Ollama selected): Interactive selection from your installed Ollama models
+
+Available command-line options:
 
 | Flag | Description |
 |------|-------------|
 | `--show` | Print the current configuration without making changes. |
+| `--list-ollama-models` | List all Ollama models installed on your system. |
 | `--auto-stage-if-clean <true\|false>` | Persist whether `generate` should stage all files when nothing is staged. |
 | `--clear-auto-stage` | Remove the stored auto-stage preference. |
 | `--verbose <true\|false>` | Set the default verbose logging preference. |
 | `--clear-verbose` | Remove the stored verbose preference. |
 | `--quiet <true\|false>` | Set the default quiet logging preference. |
 | `--clear-quiet` | Remove the stored quiet preference. |
+| `--generation-mode <automatic\|perFile>` | Set the default generation mode. |
+| `--clear-generation-mode` | Remove the stored generation mode preference. |
 | `--llm-provider <foundationModels\|ollama>` | Set the default LLM provider. |
 | `--clear-llm-provider` | Remove the stored LLM provider preference. |
 | `--ollama-model <name>` | Set the default Ollama model name. |
-| `--clear-ollama-model` | Remove the stored Ollama model preference. |
 | `--ollama-base-url <url>` | Set the default Ollama base URL. |
-| `--clear-ollama-base-url` | Remove the stored Ollama base URL preference. |
 
-When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/scg/config.json`.
+When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. For Ollama users, the interactive mode automatically fetches your installed models from `ollama list` and presents them as numbered choices.
+
+Stored settings live in `~/Library/Application Support/scg/config.json`.
 
 ### Help
 

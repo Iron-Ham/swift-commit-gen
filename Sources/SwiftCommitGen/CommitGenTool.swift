@@ -347,12 +347,28 @@ struct CommitGenTool {
 
     do {
       try process.run()
+      
+      // Dar control del TTY al proceso hijo solo si estamos en un TTY
+      if isatty(STDIN_FILENO) != 0 {
+        let childPgid = process.processIdentifier
+        // Establecer el grupo de proceso del hijo
+        setpgid(childPgid, childPgid)
+        // Dar control del TTY al hijo
+        tcsetpgrp(STDIN_FILENO, childPgid)
+      }
     } catch {
       logger.warning("Failed to launch $EDITOR (\(editor)): \(error.localizedDescription)")
       return nil
     }
 
     process.waitUntilExit()
+
+    // IMPORTANTE: Devolver el control del TTY al proceso padre
+    if isatty(STDIN_FILENO) != 0 {
+      let parentPgid = getpgrp()
+      tcsetpgrp(STDIN_FILENO, parentPgid)
+    }
+
     guard process.terminationStatus == 0 else {
       logger.warning(
         "Editor exited with status \(process.terminationStatus); keeping previous draft."
