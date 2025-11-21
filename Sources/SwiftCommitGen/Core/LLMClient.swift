@@ -266,29 +266,39 @@ struct OllamaClient: LLMClient {
   }
   
   func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult {
-    let url = URL(string: "\(configuration.baseURL)/api/generate")!
+    let url = URL(string: "\(configuration.baseURL)/api/chat")!
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     
-    // Build the complete prompt
-    let fullPrompt = """
-    \(prompt.systemPrompt.content)
-    
-    \(prompt.userPrompt.content)
-    
-    Respond ONLY with valid JSON in this exact format:
-    {
-      "subject": "commit title under 50 characters",
-      "body": "detailed explanation of the changes"
-    }
-    """
+    // Structure the messages properly
+    let messages: [[String: String]] = [
+      [
+        "role": "system",
+        "content": prompt.systemPrompt.content
+      ],
+      [
+        "role": "user",
+        "content": """
+        \(prompt.userPrompt.content)
+        
+        IMPORTANT: You must respond with ONLY valid JSON in this exact format, with no additional text before or after:
+        {
+          "subject": "your commit title under 50 characters",
+          "body": "your detailed explanation"
+        }
+        
+        Do not include any markdown formatting, code blocks, or explanations. Just the raw JSON object.
+        """
+      ]
+    ]
     
     let requestBody: [String: Any] = [
       "model": configuration.model,
-      "prompt": fullPrompt,
+      "messages": messages,
       "temperature": configuration.temperature,
       "stream": false,
+      "format": "json",  // Request JSON format explicitly
       "options": [
         "num_predict": configuration.maxTokens
       ]
@@ -303,14 +313,17 @@ struct OllamaClient: LLMClient {
     }
     
     guard httpResponse.statusCode == 200 else {
+      let errorBody = String(data: data, encoding: .utf8) ?? "no error body"
       throw CommitGenError.llmRequestFailed(
-        reason: "HTTP \(httpResponse.statusCode)"
+        reason: "HTTP \(httpResponse.statusCode): \(errorBody)"
       )
     }
     
     let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-    guard let responseText = json?["response"] as? String else {
-      throw CommitGenError.llmRequestFailed(reason: "No response text in Ollama response")
+    
+    guard let message = json?["message"] as? [String: Any],
+          let responseText = message["content"] as? String else {
+      throw CommitGenError.llmRequestFailed(reason: "No message content in Ollama response")
     }
     
     // Parse the JSON response from the model
@@ -319,22 +332,37 @@ struct OllamaClient: LLMClient {
     // Create diagnostics
     var diagnostics = prompt.diagnostics
     
-    // Estimate token usage based on character count
-    let promptTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: fullPrompt.count)
-    let outputTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: responseText.count)
-    let totalTokens = promptTokens + outputTokens
+    // Calculate token usage from the response metadata if available
+    let promptTokens: Int?
+    let outputTokens: Int?
+    
+    if let promptEvalCount = json?["prompt_eval_count"] as? Int {
+      promptTokens = promptEvalCount
+    } else {
+      promptTokens = PromptDiagnostics.tokenEstimate(
+        forCharacterCount: prompt.systemPrompt.content.count + prompt.userPrompt.content.count
+      )
+    }
+    
+    if let evalCount = json?["eval_count"] as? Int {
+      outputTokens = evalCount
+    } else {
+      outputTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: responseText.count)
+    }
+    
+    let totalTokens = (promptTokens ?? 0) + (outputTokens ?? 0)
     
     diagnostics.recordActualTokenUsage(
       promptTokens: promptTokens,
       outputTokens: outputTokens,
-      totalTokens: totalTokens
+      totalTokens: totalTokens > 0 ? totalTokens : nil
     )
     
     return LLMGenerationResult(draft: draft, diagnostics: diagnostics)
   }
   
   private func parseCommitDraft(from responseText: String) throws -> CommitDraft {
-    // Try to extract JSON from the response (might have markdown code blocks)
+    // Clean up the response text
     var jsonText = responseText.trimmingCharacters(in: .whitespacesAndNewlines)
     
     // Remove markdown code blocks if present
@@ -366,7 +394,7 @@ struct OllamaClient: LLMClient {
       }
       
       throw CommitGenError.llmRequestFailed(
-        reason: "Could not parse commit draft from response: \(error.localizedDescription)"
+        reason: "Could not parse commit draft. Response was: \(jsonText)"
       )
     }
   }
