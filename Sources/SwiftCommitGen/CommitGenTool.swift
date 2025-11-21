@@ -18,7 +18,7 @@ struct CommitGenTool {
     gitClient: GitClient = SystemGitClient(),
     summarizer: DiffSummarizer? = nil,
     promptBuilder: PromptBuilder? = nil,
-    llmClient: LLMClient = FoundationModelsClient(),
+    llmClient: LLMClient? = nil,
     renderer: Renderer = ConsoleRenderer(),
     logger: CommitGenLogger? = nil
   ) {
@@ -57,7 +57,27 @@ struct CommitGenTool {
     } else {
       self.promptBuilder = DefaultPromptBuilder()
     }
-    self.llmClient = llmClient
+    
+    if let llmClient {
+      self.llmClient = llmClient
+    } else {
+      switch options.llmProvider {
+      case .ollama(let model, let baseURL):
+        let config = OllamaClient.Configuration(
+          model: model,
+          baseURL: baseURL
+        )
+        self.llmClient = OllamaClient(configuration: config)
+      #if canImport(FoundationModels)
+      case .foundationModels:
+        self.llmClient = FoundationModelsClient()
+      #else
+      case .foundationModels:
+        fatalError("FoundationModels is not available on this platform")
+      #endif
+      }
+    }
+    
     self.renderer = renderer
     self.logger = logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
     self.consoleTheme = self.logger.consoleTheme

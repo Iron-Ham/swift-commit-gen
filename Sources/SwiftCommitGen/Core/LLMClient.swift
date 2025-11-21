@@ -1,21 +1,29 @@
 import Foundation
-import FoundationModels
+#if canImport(FoundationModels)
+@_weakLinked import FoundationModels
+#endif
 
 /// Abstraction over the on-device language model that generates commit drafts.
 protocol LLMClient {
   func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult
 }
 
+#if canImport(FoundationModels)
 @Generable(description: "A commit for changes made in a git repository.")
+#endif
 /// Model representation for the subject/body pair returned by the language model.
 struct CommitDraft: Hashable, Codable, Sendable {
+  #if canImport(FoundationModels)
   @Guide(
     description:
       "The title of a commit. It should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history. It should describe WHAT was changed."
   )
+  #endif
   var subject: String
 
+  #if canImport(FoundationModels)
   @Guide(description: "A detailed description of the the purposes of the changes. It should describe WHY the changes were made.")
+  #endif
   var body: String?
 
   init(subject: String = "", body: String? = nil) {
@@ -71,6 +79,7 @@ struct LLMGenerationResult: Sendable {
   var diagnostics: PromptDiagnostics
 }
 
+#if canImport(FoundationModels)
 /// Concrete LLM client backed by Apple's FoundationModels framework.
 struct FoundationModelsClient: LLMClient {
   /// Controls retry behavior and timeouts for generation requests.
@@ -224,6 +233,141 @@ struct FoundationModelsClient: LLMClient {
       @unknown default:
         nil
       }
+    }
+  }
+}
+#endif
+
+/// Concrete LLM client backed by Ollama API.
+struct OllamaClient: LLMClient {
+  struct Configuration {
+    var model: String
+    var baseURL: String
+    var temperature: Double
+    var maxTokens: Int
+    
+    init(
+      model: String = "llama3.2",
+      baseURL: String = "http://localhost:11434",
+      temperature: Double = 0.3,
+      maxTokens: Int = 512
+    ) {
+      self.model = model
+      self.baseURL = baseURL
+      self.temperature = temperature
+      self.maxTokens = maxTokens
+    }
+  }
+  
+  private let configuration: Configuration
+  
+  init(configuration: Configuration = Configuration()) {
+    self.configuration = configuration
+  }
+  
+  func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult {
+    let url = URL(string: "\(configuration.baseURL)/api/generate")!
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    // Build the complete prompt
+    let fullPrompt = """
+    \(prompt.systemPrompt.content)
+    
+    \(prompt.userPrompt.content)
+    
+    Respond ONLY with valid JSON in this exact format:
+    {
+      "subject": "commit title under 50 characters",
+      "body": "detailed explanation of the changes"
+    }
+    """
+    
+    let requestBody: [String: Any] = [
+      "model": configuration.model,
+      "prompt": fullPrompt,
+      "temperature": configuration.temperature,
+      "stream": false,
+      "options": [
+        "num_predict": configuration.maxTokens
+      ]
+    ]
+    
+    request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+    
+    let (data, response) = try await URLSession.shared.data(for: request)
+    
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw CommitGenError.llmRequestFailed(reason: "Invalid response type")
+    }
+    
+    guard httpResponse.statusCode == 200 else {
+      throw CommitGenError.llmRequestFailed(
+        reason: "HTTP \(httpResponse.statusCode)"
+      )
+    }
+    
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+    guard let responseText = json?["response"] as? String else {
+      throw CommitGenError.llmRequestFailed(reason: "No response text in Ollama response")
+    }
+    
+    // Parse the JSON response from the model
+    let draft = try parseCommitDraft(from: responseText)
+    
+    // Create diagnostics
+    var diagnostics = prompt.diagnostics
+    
+    // Estimate token usage based on character count
+    let promptTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: fullPrompt.count)
+    let outputTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: responseText.count)
+    let totalTokens = promptTokens + outputTokens
+    
+    diagnostics.recordActualTokenUsage(
+      promptTokens: promptTokens,
+      outputTokens: outputTokens,
+      totalTokens: totalTokens
+    )
+    
+    return LLMGenerationResult(draft: draft, diagnostics: diagnostics)
+  }
+  
+  private func parseCommitDraft(from responseText: String) throws -> CommitDraft {
+    // Try to extract JSON from the response (might have markdown code blocks)
+    var jsonText = responseText.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    // Remove markdown code blocks if present
+    if jsonText.hasPrefix("```json") {
+      jsonText = String(jsonText.dropFirst(7))
+    } else if jsonText.hasPrefix("```") {
+      jsonText = String(jsonText.dropFirst(3))
+    }
+    
+    if jsonText.hasSuffix("```") {
+      jsonText = String(jsonText.dropLast(3))
+    }
+    
+    jsonText = jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    guard let jsonData = jsonText.data(using: .utf8) else {
+      throw CommitGenError.llmRequestFailed(reason: "Could not encode response as UTF-8")
+    }
+    
+    do {
+      let decoder = JSONDecoder()
+      return try decoder.decode(CommitDraft.self, from: jsonData)
+    } catch {
+      // Fallback: try to parse manually
+      if let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+         let subject = json["subject"] as? String {
+        let body = json["body"] as? String
+        return CommitDraft(subject: subject, body: body)
+      }
+      
+      throw CommitGenError.llmRequestFailed(
+        reason: "Could not parse commit draft from response: \(error.localizedDescription)"
+      )
     }
   }
 }

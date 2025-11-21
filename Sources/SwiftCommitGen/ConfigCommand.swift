@@ -71,6 +71,24 @@ struct ConfigCommand: ParsableCommand {
   @Flag(name: .customLong("clear-mode"), help: "Remove the stored generation mode preference.")
   var clearMode: Bool = false
 
+  @Option(name: .long, help: "Set the default LLM provider (foundationModels|ollama).")
+  var llmProvider: String?
+
+  @Flag(name: .customLong("clear-llm-provider"), help: "Remove the stored LLM provider preference.")
+  var clearLLMProvider: Bool = false
+
+  @Option(name: .long, help: "Set the default Ollama model name.")
+  var ollamaModel: String?
+
+  @Flag(name: .customLong("clear-ollama-model"), help: "Remove the stored Ollama model preference.")
+  var clearOllamaModel: Bool = false
+
+  @Option(name: .long, help: "Set the default Ollama base URL.")
+  var ollamaBaseURL: String?
+
+  @Flag(name: .customLong("clear-ollama-base-url"), help: "Remove the stored Ollama base URL preference.")
+  var clearOllamaBaseURL: Bool = false
+
   /// Runs the `scg config` subcommand either interactively or via direct flag updates.
   func run() throws {
     try validateOptions()
@@ -124,6 +142,15 @@ struct ConfigCommand: ParsableCommand {
     if mode != nil && clearMode {
       throw ValidationError("Cannot use --mode together with --clear-mode.")
     }
+    if llmProvider != nil && clearLLMProvider {
+      throw ValidationError("Cannot use --llm-provider together with --clear-llm-provider.")
+    }
+    if ollamaModel != nil && clearOllamaModel {
+      throw ValidationError("Cannot use --ollama-model together with --clear-ollama-model.")
+    }
+    if ollamaBaseURL != nil && clearOllamaBaseURL {
+      throw ValidationError("Cannot use --ollama-base-url together with --clear-ollama-base-url.")
+    }
   }
 
   /// Returns true when the command should launch the interactive editor.
@@ -137,6 +164,12 @@ struct ConfigCommand: ParsableCommand {
       && !clearQuiet
       && mode == nil
       && !clearMode
+      && llmProvider == nil
+      && !clearLLMProvider
+      && ollamaModel == nil
+      && !clearOllamaModel
+      && ollamaBaseURL == nil
+      && !clearOllamaBaseURL
   }
 
   /// Applies configuration updates coming from explicit CLI flags.
@@ -211,6 +244,56 @@ struct ConfigCommand: ParsableCommand {
       }
     }
 
+    if clearLLMProvider {
+      if configuration.llmProvider != nil {
+        configuration.llmProvider = nil
+        changed = true
+      }
+    }
+    if let providerString = llmProvider {
+      let newProvider: CommitGenOptions.LLMProvider?
+      switch providerString.lowercased() {
+      case "foundationmodels":
+        newProvider = .foundationModels
+      case "ollama":
+        // Get current ollama settings or use defaults
+        let currentModel: String
+        let currentBaseURL: String
+        if case .ollama(let model, let baseURL) = configuration.llmProvider {
+          currentModel = model
+          currentBaseURL = baseURL
+        } else {
+          currentModel = "llama3.2"
+          currentBaseURL = "http://localhost:11434"
+        }
+        // Override with CLI args if provided
+        let finalModel = ollamaModel ?? currentModel
+        let finalBaseURL = ollamaBaseURL ?? currentBaseURL
+        newProvider = .ollama(model: finalModel, baseURL: finalBaseURL)
+      default:
+        print("Warning: Invalid LLM provider '\(providerString)'. Use 'foundationModels' or 'ollama'.")
+        newProvider = nil
+      }
+      
+      if let newProvider, configuration.llmProvider != newProvider {
+        configuration.llmProvider = newProvider
+        changed = true
+      }
+    } else if ollamaModel != nil || ollamaBaseURL != nil {
+      // Update Ollama settings only if already using Ollama
+      if case .ollama(let currentModel, let currentBaseURL) = configuration.llmProvider {
+        let finalModel = ollamaModel ?? currentModel
+        let finalBaseURL = ollamaBaseURL ?? currentBaseURL
+        let newProvider = CommitGenOptions.LLMProvider.ollama(model: finalModel, baseURL: finalBaseURL)
+        if configuration.llmProvider != newProvider {
+          configuration.llmProvider = newProvider
+          changed = true
+        }
+      } else {
+        print("Warning: --ollama-model and --ollama-base-url only apply when using Ollama provider.")
+      }
+    }
+
     return changed
   }
 
@@ -278,6 +361,61 @@ struct ConfigCommand: ParsableCommand {
       ],
       theme: theme
     )
+
+    // LLM Provider
+    #if canImport(FoundationModels)
+    let defaultLLMProvider: CommitGenOptions.LLMProvider = .foundationModels
+    let foundationModelsRecommended = true
+    let ollamaRecommended = false
+    #else
+    let defaultLLMProvider: CommitGenOptions.LLMProvider = .ollama(model: "llama3.2", baseURL: "http://localhost:11434")
+    let foundationModelsRecommended = false
+    let ollamaRecommended = true
+    #endif
+    
+    let currentLLMProvider = configuration.llmProvider ?? defaultLLMProvider
+    let isUsingFoundationModels: Bool
+    let isUsingOllama: Bool
+    switch currentLLMProvider {
+    case .foundationModels:
+      isUsingFoundationModels = true
+      isUsingOllama = false
+    case .ollama:
+      isUsingFoundationModels = false
+      isUsingOllama = true
+    }
+    
+    let llmProviderNote = configuration.llmProvider == nil ? "(default)" : nil
+    
+    printPreference(
+      title: "LLM Provider",
+      choices: [
+        DisplayChoice(
+          name: "foundationModels",
+          isCurrent: isUsingFoundationModels,
+          isRecommended: foundationModelsRecommended,
+          note: isUsingFoundationModels ? llmProviderNote : nil
+        ),
+        DisplayChoice(
+          name: "ollama",
+          isCurrent: isUsingOllama,
+          isRecommended: ollamaRecommended,
+          note: isUsingOllama ? llmProviderNote : nil
+        ),
+      ],
+      theme: theme
+    )
+
+    // Show Ollama settings if provider is Ollama
+    if case .ollama(let model, let baseURL) = currentLLMProvider {
+      print(theme.applying(theme.emphasis, to: "Ollama Model:"))
+      print("  \(model)")
+      print("")
+
+      print(theme.applying(theme.emphasis, to: "Ollama Base URL:"))
+      print("  \(baseURL)")
+      print("")
+    }
   }
 }
 

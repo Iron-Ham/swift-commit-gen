@@ -1,17 +1,23 @@
 scg
 ===
 
-scg is a Swift-based command line tool that inspects your current Git repository, summarizes the staged and unstaged changes, and generates a commit message proposal with Apple's on-device generative model. The goal is to keep human-in-the-loop Git commits fast, consistent, and privacy-preserving by relying on system-provided AI capabilities instead of cloud services.
+scg is a Swift-based command line tool that inspects your current Git repository, summarizes the staged and unstaged changes, and generates a commit message proposal using AI. The tool supports two backends:
+
+- **FoundationModels** (macOS 26+): Uses Apple's on-device generative model for privacy-preserving, local-only generation
+- **Ollama** (macOS 15+): Uses locally-hosted Ollama models for flexible, self-hosted AI generation
+
+The goal is to keep human-in-the-loop Git commits fast, consistent, and privacy-preserving by relying on local AI capabilities instead of cloud services.
 
 https://github.com/user-attachments/assets/499e7b11-86af-490f-bb4e-c49c65c58ecf
 
 Features
 --------
 - Detects dirty Git worktrees and extracts concise change context
-- Crafts commit message drafts with Apple's onboard generative APIs
+- Crafts commit message drafts with local AI models (FoundationModels or Ollama)
 - Provides an interactive acceptance/edit flow before writing the commit
 - Persists CLI defaults with an interactive `config` command
-- Respects local-only privacy requirements (no network calls)
+- Respects local-only privacy requirements (no network calls to cloud services)
+- Flexible LLM backend support: choose between Apple Intelligence or Ollama
 
 Project Status
 --------------
@@ -19,11 +25,21 @@ The CLI currently supports end-to-end commit generation, including Git inspectio
 
 Prerequisites
 -------------
+
+### For FoundationModels (macOS 26+)
 - macOS Tahoe (26) or later with the Apple Intelligence feature set enabled
 - Xcode 26 (or newer) with the command line tools installed (`xcode-select --install`)
 - Swift 6 toolchain (ships with Xcode 26)
-- Git 2.40+ available on `PATH`
 - Full Disk Access enabled for the Terminal (or your preferred shell) so the FoundationModels framework can initialize properly
+
+### For Ollama (macOS 15+)
+- macOS Sequoia (15) or later
+- Xcode 16.1+ with Swift 6.1 toolchain
+- [Ollama](https://ollama.ai) installed and running (`brew install ollama`)
+- An Ollama model pulled (e.g., `ollama pull llama3.2`)
+
+### Common Requirements
+- Git 2.40+ available on `PATH`
 
 Installation
 ------------
@@ -123,6 +139,9 @@ scg generate [OPTIONS]
 | `--quiet` | `-q` | Suppress routine info lines | Off | Hides `[INFO]` but keeps `[NOTICE]`, warnings, errors. Ignored if `--verbose` is present. |
 | `--no-quiet` |  | Ensure quiet mode is disabled, even if configured | - | Helpful when scripts need full output. |
 | `--single-file` |  | Analyze each file independently and then combine per-file drafts | Off | Sends a larger diff slice per file, useful when you need high-fidelity summaries. |
+| `--llm-provider <foundationModels\|ollama>` |  | Choose the LLM provider | `foundationModels` on macOS 26+, `ollama` on macOS 15 | Select which AI backend to use. |
+| `--ollama-model <name>` |  | Ollama model to use | `llama3.2` | Only applicable when using Ollama provider. |
+| `--ollama-base-url <url>` |  | Ollama API base URL | `http://localhost:11434` | Only applicable when using Ollama provider. |
 
 ### Verbosity Levels
 
@@ -174,6 +193,18 @@ Request high-fidelity per-file drafts before they are combined:
 scg --single-file
 ```
 
+Use Ollama instead of FoundationModels:
+
+```sh
+scg --llm-provider ollama
+```
+
+Use a specific Ollama model:
+
+```sh
+scg --llm-provider ollama --ollama-model codellama
+```
+
 Configuration Defaults
 ----------------------
 Use the `config` subcommand to inspect or update stored defaults. Running it with no flags opens an interactive, colorized editor that walks through each preference:
@@ -193,6 +224,12 @@ Available options:
 | `--clear-verbose` | Remove the stored verbose preference. |
 | `--quiet <true\|false>` | Set the default quiet logging preference. |
 | `--clear-quiet` | Remove the stored quiet preference. |
+| `--llm-provider <foundationModels\|ollama>` | Set the default LLM provider. |
+| `--clear-llm-provider` | Remove the stored LLM provider preference. |
+| `--ollama-model <name>` | Set the default Ollama model name. |
+| `--clear-ollama-model` | Remove the stored Ollama model preference. |
+| `--ollama-base-url <url>` | Set the default Ollama base URL. |
+| `--clear-ollama-base-url` | Remove the stored Ollama base URL preference. |
 
 When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/scg/config.json`.
 
