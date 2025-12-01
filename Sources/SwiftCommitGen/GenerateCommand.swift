@@ -136,16 +136,20 @@ struct GenerateCommand: AsyncParsableCommand {
       switch providerString.lowercased() {
       case "foundationmodels":
         #if canImport(FoundationModels)
-        resolvedLLMProvider = .foundationModels
+          resolvedLLMProvider = .foundationModels
         #else
-        throw ValidationError("FoundationModels is not available on this platform. Use 'ollama' instead.")
+          throw ValidationError(
+            "FoundationModels is not available on this platform. Use 'ollama' instead."
+          )
         #endif
       case "ollama":
         let model = ollamaModel ?? "llama3.2"
         let baseURL = ollamaBaseURL ?? "http://localhost:11434"
         resolvedLLMProvider = .ollama(model: model, baseURL: baseURL)
       default:
-        throw ValidationError("Invalid LLM provider '\(providerString)'. Use 'foundationModels' or 'ollama'.")
+        throw ValidationError(
+          "Invalid LLM provider '\(providerString)'. Use 'foundationModels' or 'ollama'."
+        )
       }
     } else if let configuredProvider = userConfig.llmProvider {
       // Use configured provider, but override ollama settings if provided via CLI
@@ -160,11 +164,11 @@ struct GenerateCommand: AsyncParsableCommand {
     } else {
       // No provider specified, use platform default
       #if canImport(FoundationModels)
-      resolvedLLMProvider = .foundationModels
+        resolvedLLMProvider = .foundationModels
       #else
-      let model = ollamaModel ?? "llama3.2"
-      let baseURL = ollamaBaseURL ?? "http://localhost:11434"
-      resolvedLLMProvider = .ollama(model: model, baseURL: baseURL)
+        let model = ollamaModel ?? "llama3.2"
+        let baseURL = ollamaBaseURL ?? "http://localhost:11434"
+        resolvedLLMProvider = .ollama(model: model, baseURL: baseURL)
       #endif
     }
 

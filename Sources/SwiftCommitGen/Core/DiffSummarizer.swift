@@ -1,6 +1,7 @@
 import Foundation
+
 #if canImport(FoundationModels)
-@_weakLinked import FoundationModels
+  @_weakLinked import FoundationModels
 #endif
 
 /// Represents the staged changes that will be summarized for prompt construction.
@@ -52,13 +53,13 @@ struct ChangeSummary: Hashable, Codable {
     }
 
     #if canImport(FoundationModels)
-    var promptRepresentation: Prompt {
-      Prompt {
-        for line in promptLines() {
-          line
+      var promptRepresentation: Prompt {
+        Prompt {
+          for line in promptLines() {
+            line
+          }
         }
       }
-    }
     #endif
 
     func estimatedPromptLineCount() -> Int {
@@ -197,13 +198,13 @@ struct ChangeSummary: Hashable, Codable {
   }
 
   #if canImport(FoundationModels)
-  var promptRepresentation: Prompt {
-    Prompt {
-      for line in promptLines() {
-        line
+    var promptRepresentation: Prompt {
+      Prompt {
+        for line in promptLines() {
+          line
+        }
       }
     }
-  }
   #endif
 }
 

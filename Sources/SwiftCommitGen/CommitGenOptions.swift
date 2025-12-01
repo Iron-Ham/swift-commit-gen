@@ -1,5 +1,5 @@
 #if canImport(FoundationModels)
-@_weakLinked import FoundationModels
+  @_weakLinked import FoundationModels
 #endif
 
 /// Container for the resolved configuration driving a commit generation run.
@@ -21,9 +21,9 @@ struct CommitGenOptions {
     case detailed
 
     #if canImport(FoundationModels)
-    var promptRepresentation: Prompt {
-      Prompt { styleGuidance }
-    }
+      var promptRepresentation: Prompt {
+        Prompt { styleGuidance }
+      }
     #endif
 
     var styleGuidance: String {

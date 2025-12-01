@@ -79,7 +79,7 @@ struct ConfigCommand: ParsableCommand {
 
   @Option(name: .long, help: "Set the default Ollama model name.")
   var ollamaModel: String?
-  
+
   @Flag(name: .customLong("list-ollama-models"), help: "List available Ollama models.")
   var listOllamaModels: Bool = false
 
@@ -89,7 +89,10 @@ struct ConfigCommand: ParsableCommand {
   @Option(name: .long, help: "Set the default Ollama base URL.")
   var ollamaBaseURL: String?
 
-  @Flag(name: .customLong("clear-ollama-base-url"), help: "Remove the stored Ollama base URL preference.")
+  @Flag(
+    name: .customLong("clear-ollama-base-url"),
+    help: "Remove the stored Ollama base URL preference."
+  )
   var clearOllamaBaseURL: Bool = false
 
   /// Runs the `scg config` subcommand either interactively or via direct flag updates.
@@ -99,7 +102,7 @@ struct ConfigCommand: ParsableCommand {
       listAvailableOllamaModels()
       return
     }
-    
+
     try validateOptions()
     let dependencies = ConfigCommand.resolveDependencies()
     let store = dependencies.makeStore()
@@ -281,10 +284,12 @@ struct ConfigCommand: ParsableCommand {
         let finalBaseURL = ollamaBaseURL ?? currentBaseURL
         newProvider = .ollama(model: finalModel, baseURL: finalBaseURL)
       default:
-        print("Warning: Invalid LLM provider '\(providerString)'. Use 'foundationModels' or 'ollama'.")
+        print(
+          "Warning: Invalid LLM provider '\(providerString)'. Use 'foundationModels' or 'ollama'."
+        )
         newProvider = nil
       }
-      
+
       if let newProvider, configuration.llmProvider != newProvider {
         configuration.llmProvider = newProvider
         changed = true
@@ -294,13 +299,18 @@ struct ConfigCommand: ParsableCommand {
       if case .ollama(let currentModel, let currentBaseURL) = configuration.llmProvider {
         let finalModel = ollamaModel ?? currentModel
         let finalBaseURL = ollamaBaseURL ?? currentBaseURL
-        let newProvider = CommitGenOptions.LLMProvider.ollama(model: finalModel, baseURL: finalBaseURL)
+        let newProvider = CommitGenOptions.LLMProvider.ollama(
+          model: finalModel,
+          baseURL: finalBaseURL
+        )
         if configuration.llmProvider != newProvider {
           configuration.llmProvider = newProvider
           changed = true
         }
       } else {
-        print("Warning: --ollama-model and --ollama-base-url only apply when using Ollama provider.")
+        print(
+          "Warning: --ollama-model and --ollama-base-url only apply when using Ollama provider."
+        )
       }
     }
 
@@ -374,15 +384,18 @@ struct ConfigCommand: ParsableCommand {
 
     // LLM Provider
     #if canImport(FoundationModels)
-    let defaultLLMProvider: CommitGenOptions.LLMProvider = .foundationModels
-    let foundationModelsRecommended = true
-    let ollamaRecommended = false
+      let defaultLLMProvider: CommitGenOptions.LLMProvider = .foundationModels
+      let foundationModelsRecommended = true
+      let ollamaRecommended = false
     #else
-    let defaultLLMProvider: CommitGenOptions.LLMProvider = .ollama(model: "llama3.2", baseURL: "http://localhost:11434")
-    let foundationModelsRecommended = false
-    let ollamaRecommended = true
+      let defaultLLMProvider: CommitGenOptions.LLMProvider = .ollama(
+        model: "llama3.2",
+        baseURL: "http://localhost:11434"
+      )
+      let foundationModelsRecommended = false
+      let ollamaRecommended = true
     #endif
-    
+
     let currentLLMProvider = configuration.llmProvider ?? defaultLLMProvider
     let isUsingFoundationModels: Bool
     let isUsingOllama: Bool
@@ -394,9 +407,9 @@ struct ConfigCommand: ParsableCommand {
       isUsingFoundationModels = false
       isUsingOllama = true
     }
-    
+
     let llmProviderNote = configuration.llmProvider == nil ? "(default)" : nil
-    
+
     printPreference(
       title: "LLM Provider",
       choices: [
@@ -420,20 +433,22 @@ struct ConfigCommand: ParsableCommand {
     if case .ollama(let model, let baseURL) = currentLLMProvider {
       // Get available models to show them as options
       let availableModels = fetchOllamaModels(baseURL: baseURL)
-      
+
       if !availableModels.isEmpty {
         var modelChoices: [DisplayChoice] = []
         for availableModel in availableModels {
           // Normalize model names for comparison (handle :latest suffix)
-          let normalizedAvailable = availableModel.hasSuffix(":latest") 
+          let normalizedAvailable =
+            availableModel.hasSuffix(":latest")
             ? String(availableModel.dropLast(7))
             : availableModel
-          let normalizedCurrent = model.hasSuffix(":latest")
+          let normalizedCurrent =
+            model.hasSuffix(":latest")
             ? String(model.dropLast(7))
             : model
-          
+
           let isCurrentModel = normalizedAvailable == normalizedCurrent || availableModel == model
-          
+
           modelChoices.append(
             DisplayChoice(
               name: availableModel,
@@ -442,7 +457,7 @@ struct ConfigCommand: ParsableCommand {
             )
           )
         }
-        
+
         printPreference(
           title: "Ollama Model",
           choices: modelChoices,
@@ -460,30 +475,30 @@ struct ConfigCommand: ParsableCommand {
       print("")
     }
   }
-  
+
   /// Fetches available models from Ollama API.
   private func fetchOllamaModels(baseURL: String) -> [String] {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = ["ollama", "list"]
-    
+
     let pipe = Pipe()
     process.standardOutput = pipe
     process.standardError = Pipe()
-    
+
     do {
       try process.run()
       process.waitUntilExit()
-      
+
       guard process.terminationStatus == 0 else {
         return []
       }
-      
+
       let data = pipe.fileHandleForReading.readDataToEndOfFile()
       guard let output = String(data: data, encoding: .utf8) else {
         return []
       }
-      
+
       // Parse ollama list output
       // Format: NAME                    ID              SIZE      MODIFIED
       var models: [String] = []
@@ -491,53 +506,58 @@ struct ConfigCommand: ParsableCommand {
       for (index, line) in lines.enumerated() {
         // Skip header line
         if index == 0 { continue }
-        
+
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { continue }
-        
+
         // Get the first column (model name)
         let columns = trimmed.split(separator: " ", omittingEmptySubsequences: true)
         if let modelName = columns.first {
           models.append(String(modelName))
         }
       }
-      
+
       return models
     } catch {
       return []
     }
   }
-  
+
   /// Lists available Ollama models by executing `ollama list`.
   private func listAvailableOllamaModels() {
     let theme = ConsoleTheme.resolve(stream: .stdout)
-    
+
     print(theme.applying(theme.emphasis, to: "Available Ollama models:"))
     print("")
-    
+
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = ["ollama", "list"]
-    
+
     let pipe = Pipe()
     process.standardOutput = pipe
     let errorPipe = Pipe()
     process.standardError = errorPipe
-    
+
     do {
       try process.run()
       process.waitUntilExit()
-      
+
       if process.terminationStatus != 0 {
         let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
         if let errorMessage = String(data: errorData, encoding: .utf8), !errorMessage.isEmpty {
           print(theme.applying(theme.muted, to: "Error: \(errorMessage)"))
         } else {
-          print(theme.applying(theme.muted, to: "Error: Could not fetch Ollama models. Make sure Ollama is installed and running."))
+          print(
+            theme.applying(
+              theme.muted,
+              to: "Error: Could not fetch Ollama models. Make sure Ollama is installed and running."
+            )
+          )
         }
         return
       }
-      
+
       let data = pipe.fileHandleForReading.readDataToEndOfFile()
       if let output = String(data: data, encoding: .utf8) {
         print(output)
@@ -735,7 +755,7 @@ struct ConfigInteractiveEditor {
         updated.llmProvider = nil
       }
     }
-    
+
     // If Ollama is selected, prompt for model selection
     if case .ollama(let currentModel, let currentBaseURL) = updated.llmProvider {
       if let selectedModel = promptForOllamaModel(current: currentModel, baseURL: currentBaseURL) {
@@ -860,14 +880,19 @@ struct ConfigInteractiveEditor {
   private func promptForLLMProvider(
     current: CommitGenOptions.LLMProvider?
   ) -> LLMProviderChoice? {
-    let currentProvider = current ?? {
-      #if canImport(FoundationModels)
-      return CommitGenOptions.LLMProvider.foundationModels
-      #else
-      return CommitGenOptions.LLMProvider.ollama(model: "llama3.2", baseURL: "http://localhost:11434")
-      #endif
-    }()
-    
+    let currentProvider =
+      current
+      ?? {
+        #if canImport(FoundationModels)
+          return CommitGenOptions.LLMProvider.foundationModels
+        #else
+          return CommitGenOptions.LLMProvider.ollama(
+            model: "llama3.2",
+            baseURL: "http://localhost:11434"
+          )
+        #endif
+      }()
+
     let currentDescription: String
     switch currentProvider {
     case .foundationModels:
@@ -875,7 +900,7 @@ struct ConfigInteractiveEditor {
     case .ollama:
       currentDescription = "ollama"
     }
-    
+
     let choices: [Choice<LLMProviderChoice>] = [
       Choice(
         label: "1",
@@ -884,9 +909,9 @@ struct ConfigInteractiveEditor {
         value: .foundationModels,
         isRecommended: {
           #if canImport(FoundationModels)
-          return true
+            return true
           #else
-          return false
+            return false
           #endif
         }()
       ),
@@ -897,9 +922,9 @@ struct ConfigInteractiveEditor {
         value: .ollama(model: "", baseURL: ""),
         isRecommended: {
           #if canImport(FoundationModels)
-          return false
+            return false
           #else
-          return true
+            return true
           #endif
         }()
       ),
@@ -911,7 +936,7 @@ struct ConfigInteractiveEditor {
         isVisible: false
       ),
     ]
-    
+
     let choice = promptChoice(
       title: "LLM Provider",
       currentDescription: currentDescription,
@@ -929,12 +954,12 @@ struct ConfigInteractiveEditor {
       },
       additionalInstructions: ["Type 'clear' to remove the stored preference."]
     )
-    
+
     // If user selected Ollama, keep current settings or use defaults
     guard case .ollama = choice else {
       return choice
     }
-    
+
     // Get current model and baseURL
     let currentModel: String
     let currentBaseURL: String
@@ -945,48 +970,57 @@ struct ConfigInteractiveEditor {
       currentModel = "llama3.2"
       currentBaseURL = "http://localhost:11434"
     }
-    
+
     return .ollama(model: currentModel, baseURL: currentBaseURL)
   }
-  
+
   /// Presents a numbered menu for choosing an Ollama model.
   private func promptForOllamaModel(current: String, baseURL: String) -> String? {
     // Try to fetch available models from Ollama
     let availableModels = fetchOllamaModels(baseURL: baseURL)
-    
+
     if availableModels.isEmpty {
       // Fallback to manual input if can't fetch models
       io.printLine("")
-      io.printLine(theme.applying(theme.muted, to: "⚠ Could not fetch models from Ollama. Make sure Ollama is running."))
+      io.printLine(
+        theme.applying(
+          theme.muted,
+          to: "⚠ Could not fetch models from Ollama. Make sure Ollama is running."
+        )
+      )
       io.printLine(theme.applying(theme.emphasis, to: "Ollama Model"))
       io.printLine(theme.applying(theme.muted, to: "  Current: \(current)"))
       io.printLine(theme.applying(theme.muted, to: "  Press Enter to keep, or type model name:"))
       let modelResponse = io.prompt("  > ")
-      if let response = modelResponse?.trimmingCharacters(in: .whitespacesAndNewlines), !response.isEmpty {
+      if let response = modelResponse?.trimmingCharacters(in: .whitespacesAndNewlines),
+        !response.isEmpty
+      {
         return response
       }
       return nil
     }
-    
+
     // Show available models
     io.printLine("")
-    
+
     // Normalize current model name for comparison (handle :latest suffix)
-    let normalizedCurrent = current.hasSuffix(":latest") 
+    let normalizedCurrent =
+      current.hasSuffix(":latest")
       ? String(current.dropLast(7))
       : current
-    
+
     var modelChoices: [Choice<String>] = []
     for (index, model) in availableModels.enumerated() {
       let label = "\(index + 1)"
-      
+
       // Normalize model name for comparison
-      let normalizedModel = model.hasSuffix(":latest")
+      let normalizedModel =
+        model.hasSuffix(":latest")
         ? String(model.dropLast(7))
         : model
-      
+
       let isCurrentModel = normalizedModel == normalizedCurrent || model == current
-      
+
       // Build comprehensive token list for matching user input
       var tokens = [label, model, model.lowercased()]
       // Add normalized version without :latest
@@ -994,7 +1028,7 @@ struct ConfigInteractiveEditor {
         tokens.append(normalizedModel)
         tokens.append(normalizedModel.lowercased())
       }
-      
+
       modelChoices.append(
         Choice(
           label: label,
@@ -1005,14 +1039,15 @@ struct ConfigInteractiveEditor {
         )
       )
     }
-    
+
     return promptChoice(
       title: "Ollama Model",
       currentDescription: current,
       choices: modelChoices,
       keepMessage: "Press Enter to keep current model",
       isCurrent: { selectedModel in
-        let normalizedSelected = selectedModel.hasSuffix(":latest")
+        let normalizedSelected =
+          selectedModel.hasSuffix(":latest")
           ? String(selectedModel.dropLast(7))
           : selectedModel
         return normalizedSelected == normalizedCurrent || selectedModel == current
@@ -1020,30 +1055,30 @@ struct ConfigInteractiveEditor {
       additionalInstructions: ["Type model name directly or select by number."]
     )
   }
-  
+
   /// Fetches available models from Ollama API.
   private func fetchOllamaModels(baseURL: String) -> [String] {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = ["ollama", "list"]
-    
+
     let pipe = Pipe()
     process.standardOutput = pipe
     process.standardError = Pipe()
-    
+
     do {
       try process.run()
       process.waitUntilExit()
-      
+
       guard process.terminationStatus == 0 else {
         return []
       }
-      
+
       let data = pipe.fileHandleForReading.readDataToEndOfFile()
       guard let output = String(data: data, encoding: .utf8) else {
         return []
       }
-      
+
       // Parse ollama list output
       // Format: NAME                    ID              SIZE      MODIFIED
       var models: [String] = []
@@ -1051,17 +1086,17 @@ struct ConfigInteractiveEditor {
       for (index, line) in lines.enumerated() {
         // Skip header line
         if index == 0 { continue }
-        
+
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty { continue }
-        
+
         // Get the first column (model name)
         let columns = trimmed.split(separator: " ", omittingEmptySubsequences: true)
         if let modelName = columns.first {
           models.append(String(modelName))
         }
       }
-      
+
       return models
     } catch {
       return []

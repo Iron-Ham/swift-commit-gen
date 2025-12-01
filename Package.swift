@@ -21,7 +21,10 @@ let package = Package(
         .product(name: "ArgumentParser", package: "swift-argument-parser")
       ],
       swiftSettings: [
-        .unsafeFlags(["-Xfrontend", "-warn-long-function-bodies=500"], .when(configuration: .debug))
+        .unsafeFlags(
+          ["-Xfrontend", "-warn-long-function-bodies=500"],
+          .when(configuration: .debug)
+        )
       ]
     ),
     .testTarget(

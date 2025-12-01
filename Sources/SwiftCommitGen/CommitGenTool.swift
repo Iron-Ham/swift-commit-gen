@@ -57,7 +57,7 @@ struct CommitGenTool {
     } else {
       self.promptBuilder = DefaultPromptBuilder()
     }
-    
+
     if let llmClient {
       self.llmClient = llmClient
     } else {
@@ -71,15 +71,15 @@ struct CommitGenTool {
         )
         self.llmClient = OllamaClient(configuration: config)
       #if canImport(FoundationModels)
-      case .foundationModels:
-        self.llmClient = FoundationModelsClient()
+        case .foundationModels:
+          self.llmClient = FoundationModelsClient()
       #else
-      case .foundationModels:
-        fatalError("FoundationModels is not available on this platform")
+        case .foundationModels:
+          fatalError("FoundationModels is not available on this platform")
       #endif
       }
     }
-    
+
     self.renderer = renderer
     self.logger = logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
     self.consoleTheme = self.logger.consoleTheme
@@ -347,7 +347,7 @@ struct CommitGenTool {
 
     do {
       try process.run()
-      
+
       // Give TTY control to the child process only if we are in a TTY
       if isatty(STDIN_FILENO) != 0 {
         let childPgid = process.processIdentifier

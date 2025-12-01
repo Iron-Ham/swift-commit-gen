@@ -1,6 +1,7 @@
 import Foundation
+
 #if canImport(FoundationModels)
-@_weakLinked import FoundationModels
+  @_weakLinked import FoundationModels
 #endif
 
 /// Builds the prompt used to merge per-batch drafts into a single commit message.
@@ -57,39 +58,41 @@ struct BatchCombinationPromptBuilder {
     )
 
     #if canImport(FoundationModels)
-    let userPrompt = Prompt {
-      for line in userLines {
-        line
+      let userPrompt = Prompt {
+        for line in userLines {
+          line
+        }
       }
-    }
 
-    let systemPrompt = Instructions {
-      """
-      You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
-      Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
-      The title should succinctly describe the change in a specific and informative manner.
-      Provide an optional body only when useful for additional context. 
-      If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
+      let systemPrompt = Instructions {
+        """
+        You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
+        Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
+        The title should succinctly describe the change in a specific and informative manner.
+        Provide an optional body only when useful for additional context. 
+        If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
 
-      Be clear and concise, but do not omit critical information.
-      """
-      ""
-      metadata.style.styleGuidance
-    }
+        Be clear and concise, but do not omit critical information.
+        """
+        ""
+        metadata.style.styleGuidance
+      }
     #else
-    let userPrompt = PromptContent(userLines.joined(separator: "\n"))
-    
-    let systemPrompt = PromptContent("""
-    You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
-    Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
-    The title should succinctly describe the change in a specific and informative manner.
-    Provide an optional body only when useful for additional context. 
-    If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
+      let userPrompt = PromptContent(userLines.joined(separator: "\n"))
 
-    Be clear and concise, but do not omit critical information.
+      let systemPrompt = PromptContent(
+        """
+        You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
+        Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
+        The title should succinctly describe the change in a specific and informative manner.
+        Provide an optional body only when useful for additional context. 
+        If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
 
-    \(metadata.style.styleGuidance)
-    """)
+        Be clear and concise, but do not omit critical information.
+
+        \(metadata.style.styleGuidance)
+        """
+      )
     #endif
 
     let characterCount = userLines.reduce(0) { $0 + $1.count + 1 }
