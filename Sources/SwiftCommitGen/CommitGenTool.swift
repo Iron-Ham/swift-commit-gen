@@ -348,12 +348,12 @@ struct CommitGenTool {
     do {
       try process.run()
       
-      // Dar control del TTY al proceso hijo solo si estamos en un TTY
+      // Give TTY control to the child process only if we are in a TTY
       if isatty(STDIN_FILENO) != 0 {
         let childPgid = process.processIdentifier
-        // Establecer el grupo de proceso del hijo
+        // Set the child's process group
         setpgid(childPgid, childPgid)
-        // Dar control del TTY al hijo
+        // Give TTY control to the child
         tcsetpgrp(STDIN_FILENO, childPgid)
       }
     } catch {
@@ -363,7 +363,7 @@ struct CommitGenTool {
 
     process.waitUntilExit()
 
-    // IMPORTANTE: Devolver el control del TTY al proceso padre
+    // IMPORTANT: Return control of the TTY to the parent process
     if isatty(STDIN_FILENO) != 0 {
       let parentPgid = getpgrp()
       tcsetpgrp(STDIN_FILENO, parentPgid)
