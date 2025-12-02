@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
   name: "scg",
   platforms: [
-    .macOS(.v26)
+    .macOS(.v15)
   ],
   products: [
     .executable(name: "scg", targets: ["SwiftCommitGen"])
@@ -20,8 +20,11 @@ let package = Package(
       dependencies: [
         .product(name: "ArgumentParser", package: "swift-argument-parser")
       ],
-      linkerSettings: [
-        .linkedFramework("FoundationModels")
+      swiftSettings: [
+        .unsafeFlags(
+          ["-Xfrontend", "-warn-long-function-bodies=500"],
+          .when(configuration: .debug)
+        )
       ]
     ),
     .testTarget(

@@ -18,7 +18,7 @@ struct CommitGenTool {
     gitClient: GitClient = SystemGitClient(),
     summarizer: DiffSummarizer? = nil,
     promptBuilder: PromptBuilder? = nil,
-    llmClient: LLMClient = FoundationModelsClient(),
+    llmClient: LLMClient? = nil,
     renderer: Renderer = ConsoleRenderer(),
     logger: CommitGenLogger? = nil
   ) {
@@ -29,8 +29,8 @@ struct CommitGenTool {
       self.summarizer = summarizer
     } else {
       let perFileMode = options.generationMode == .perFile
-      let maxLines = perFileMode ? 200 : 80
-      let maxFullLines = perFileMode ? 400 : 200
+      let maxLines = perFileMode ? 500 : 300
+      let maxFullLines = perFileMode ? 1000 : 500
       self.summarizer = DefaultDiffSummarizer(
         gitClient: gitClient,
         maxLinesPerFile: maxLines,
@@ -57,7 +57,29 @@ struct CommitGenTool {
     } else {
       self.promptBuilder = DefaultPromptBuilder()
     }
-    self.llmClient = llmClient
+
+    if let llmClient {
+      self.llmClient = llmClient
+    } else {
+      switch options.llmProvider {
+      case .ollama(let model, let baseURL):
+        let config = OllamaClient.Configuration(
+          model: model,
+          baseURL: baseURL,
+          logger: logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
+
+        )
+        self.llmClient = OllamaClient(configuration: config)
+      #if canImport(FoundationModels)
+        case .foundationModels:
+          self.llmClient = FoundationModelsClient()
+      #else
+        case .foundationModels:
+          fatalError("FoundationModels is not available on this platform")
+      #endif
+      }
+    }
+
     self.renderer = renderer
     self.logger = logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
     self.consoleTheme = self.logger.consoleTheme
@@ -325,12 +347,28 @@ struct CommitGenTool {
 
     do {
       try process.run()
+
+      // Give TTY control to the child process only if we are in a TTY
+      if isatty(STDIN_FILENO) != 0 {
+        let childPgid = process.processIdentifier
+        // Set the child's process group
+        setpgid(childPgid, childPgid)
+        // Give TTY control to the child
+        tcsetpgrp(STDIN_FILENO, childPgid)
+      }
     } catch {
       logger.warning("Failed to launch $EDITOR (\(editor)): \(error.localizedDescription)")
       return nil
     }
 
     process.waitUntilExit()
+
+    // IMPORTANT: Return control of the TTY to the parent process
+    if isatty(STDIN_FILENO) != 0 {
+      let parentPgid = getpgrp()
+      tcsetpgrp(STDIN_FILENO, parentPgid)
+    }
+
     guard process.terminationStatus == 0 else {
       logger.warning(
         "Editor exited with status \(process.terminationStatus); keeping previous draft."

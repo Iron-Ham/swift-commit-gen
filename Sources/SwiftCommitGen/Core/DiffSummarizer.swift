@@ -1,10 +1,13 @@
 import Foundation
-import FoundationModels
+
+#if canImport(FoundationModels)
+  @_weakLinked import FoundationModels
+#endif
 
 /// Represents the staged changes that will be summarized for prompt construction.
-struct ChangeSummary: Hashable, Codable, PromptRepresentable {
+struct ChangeSummary: Hashable, Codable {
   /// Describes how a single file contributes to the change summary and prompt content.
-  struct FileSummary: Hashable, Codable, PromptRepresentable {
+  struct FileSummary: Hashable, Codable {
     enum SnippetMode: String, Codable {
       case compact
       case full
@@ -49,13 +52,15 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
       }
     }
 
-    var promptRepresentation: Prompt {
-      Prompt {
-        for line in promptLines() {
-          line
+    #if canImport(FoundationModels)
+      var promptRepresentation: Prompt {
+        Prompt {
+          for line in promptLines() {
+            line
+          }
         }
       }
-    }
+    #endif
 
     func estimatedPromptLineCount() -> Int {
       var lines = 1  // header line per file
@@ -192,13 +197,15 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     files.count
   }
 
-  var promptRepresentation: Prompt {
-    Prompt {
-      for line in promptLines() {
-        line
+  #if canImport(FoundationModels)
+    var promptRepresentation: Prompt {
+      Prompt {
+        for line in promptLines() {
+          line
+        }
       }
     }
-  }
+  #endif
 }
 
 extension ChangeSummary {

@@ -1,7 +1,33 @@
-import FoundationModels
+#if canImport(FoundationModels)
+  @_weakLinked import FoundationModels
+#endif
+
+/// Simple prompt content wrapper for when FoundationModels is not available
+struct PromptContent {
+  var content: String
+
+  init(_ content: String) {
+    self.content = content
+  }
+
+  init(@StringBuilder _ builder: () -> String) {
+    self.content = builder()
+  }
+}
+
+@resultBuilder
+struct StringBuilder {
+  static func buildBlock(_ components: String...) -> String {
+    components.joined(separator: "\n")
+  }
+
+  static func buildExpression(_ expression: String) -> String {
+    expression
+  }
+}
 
 /// High-level context that accompanies the diff when constructing model prompts.
-struct PromptMetadata: PromptRepresentable {
+struct PromptMetadata {
   var repositoryName: String
   var branchName: String
   var style: CommitGenOptions.PromptStyle
@@ -11,7 +37,7 @@ struct PromptMetadata: PromptRepresentable {
     repositoryName: String,
     branchName: String,
     style: CommitGenOptions.PromptStyle,
-    includeUnstagedChanges: Bool,
+    includeUnstagedChanges: Bool
   ) {
     self.repositoryName = repositoryName
     self.branchName = branchName
@@ -23,14 +49,25 @@ struct PromptMetadata: PromptRepresentable {
     includeUnstagedChanges ? "staged + unstaged changes" : "staged changes only"
   }
 
-  var promptRepresentation: Prompt {
-    Prompt {
-      "Repository: \(repositoryName)"
-      "Branch: \(branchName)"
-      "Scope: \(scopeDescription)"
-      "Style: \(style)"
+  #if canImport(FoundationModels)
+    var promptRepresentation: Prompt {
+      Prompt {
+        "Repository: \(repositoryName)"
+        "Branch: \(branchName)"
+        "Scope: \(scopeDescription)"
+        "Style: \(style)"
+      }
     }
-  }
+  #else
+    var promptContent: PromptContent {
+      PromptContent {
+        "Repository: \(repositoryName)"
+        "Branch: \(branchName)"
+        "Scope: \(scopeDescription)"
+        "Style: \(style.styleGuidance)"
+      }
+    }
+  #endif
 }
 
 /// Produces the system and user prompts that will be sent to the language model.
@@ -128,8 +165,13 @@ struct PromptDiagnostics: Codable, Sendable {
 
 /// Bundles the full prompt payload and derived diagnostics for a generation request.
 struct PromptPackage {
-  var systemPrompt: Instructions
-  var userPrompt: Prompt
+  #if canImport(FoundationModels)
+    var systemPrompt: Instructions
+    var userPrompt: Prompt
+  #else
+    var systemPrompt: PromptContent
+    var userPrompt: PromptContent
+  #endif
   var diagnostics: PromptDiagnostics
 
   func appendingUserContext(_ context: String) -> PromptPackage {
@@ -142,12 +184,23 @@ struct PromptPackage {
     ).count
     let additionalLines = contextLineCount + 2  // blank separator + heading
 
-    let augmentedUserPrompt = Prompt {
-      userPrompt
-      ""
-      "Additional context from user:"
-      trimmed
-    }
+    #if canImport(FoundationModels)
+      let augmentedUserPrompt = Prompt {
+        userPrompt
+        ""
+        "Additional context from user:"
+        trimmed
+      }
+    #else
+      let augmentedUserPrompt = PromptContent(
+        """
+        \(userPrompt.content)
+
+        Additional context from user:
+        \(trimmed)
+        """
+      )
+    #endif
 
     var updatedDiagnostics = diagnostics
     let additionalCharacters =
@@ -292,27 +345,51 @@ struct DefaultPromptBuilder: PromptBuilder {
     return PromptPackage(systemPrompt: system, userPrompt: user, diagnostics: diagnostics)
   }
 
-  private func buildSystemPrompt(style: CommitGenOptions.PromptStyle) -> Instructions {
-    Instructions {
-      """
-      You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description.
-      A changeset is given in the git diff output format, affecting one or multiple files.
+  #if canImport(FoundationModels)
+    private func buildSystemPrompt(style: CommitGenOptions.PromptStyle) -> Instructions {
+      Instructions {
+        """
+        You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description.
+        A changeset is given in the git diff output format, affecting one or multiple files.
 
-      The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history.
-      The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information.
-      The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.
+        The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history.
+        The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information.
+        The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.
 
-      Be brief and concise.
+        Be brief and concise.
 
-      Do NOT include a description of changes in "lock" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.
+        Do NOT include a description of changes in "lock" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.
 
-      When more explanation is helpful, provide a short body with full sentences.
-      Leave the body empty when the subject already captures the change or the context is unclear.
-      """
-      ""
-      style.styleGuidance
+        When more explanation is helpful, provide a short body with full sentences.
+        Leave the body empty when the subject already captures the change or the context is unclear.
+        """
+        ""
+        style.styleGuidance
+      }
     }
-  }
+  #else
+    private func buildSystemPrompt(style: CommitGenOptions.PromptStyle) -> PromptContent {
+      PromptContent(
+        """
+        You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description.
+        A changeset is given in the git diff output format, affecting one or multiple files.
+
+        The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history.
+        The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information.
+        The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.
+
+        Be brief and concise.
+
+        DO NOT include a description of changes in "lock" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.
+
+        When more explanation is helpful, provide a short body with full sentences.
+        Leave the body empty when the subject already captures the change or the context is unclear.
+
+        \(style.styleGuidance)
+        """
+      )
+    }
+  #endif
 
   private func adjustedSnippetLimit(totalFiles: Int, configuredLimit: Int) -> Int {
     var limit = configuredLimit
@@ -327,35 +404,91 @@ struct DefaultPromptBuilder: PromptBuilder {
   }
 }
 
-private func buildUserPrompt(
-  displaySummary: ChangeSummary,
-  fullSummary: ChangeSummary,
-  metadata: PromptMetadata,
-  isCompacted: Bool,
-  remainder: RemainderContext
-) -> Prompt {
-  Prompt {
-    metadata
-    "Totals: \(fullSummary.fileCount) files; +\(fullSummary.totalAdditions) / -\(fullSummary.totalDeletions)"
+#if canImport(FoundationModels)
+  private func buildUserPrompt(
+    displaySummary: ChangeSummary,
+    fullSummary: ChangeSummary,
+    metadata: PromptMetadata,
+    isCompacted: Bool,
+    remainder: RemainderContext
+  ) -> Prompt {
+    Prompt {
+      metadata
+      "Totals: \(fullSummary.fileCount) files; +\(fullSummary.totalAdditions) / -\(fullSummary.totalDeletions)"
+
+      if isCompacted {
+        "Context trimmed to stay within the model window; prioritize the most impactful changes."
+      }
+
+      if remainder.count > 0 {
+        "Showing first \(displaySummary.fileCount) files (of \(fullSummary.fileCount)); remaining \(remainder.count) files contribute +\(remainder.additions) / -\(remainder.deletions)."
+
+        for entry in remainder.kindBreakdown.prefix(4) {
+          "  more: \(entry.count) \(entry.kind) file(s)"
+        }
+
+        if remainder.generatedCount > 0 {
+          "  note: \(remainder.generatedCount) generated file(s) omitted per .gitattributes"
+        }
+
+        if !remainder.hintFiles.isEmpty {
+          if remainder.remainingNonGeneratedCount > remainder.hintFiles.count {
+            "  showing \(remainder.hintFiles.count) representative paths:"
+          }
+          for file in remainder.hintFiles {
+            let descriptor = [
+              file.kind,
+              locationDescription(file.location),
+              file.isBinary ? "binary" : nil,
+              file.isGenerated ? "generated" : nil,
+            ].compactMap { $0 }.joined(separator: ", ")
+            "    • \(file.path) [\(descriptor)]"
+          }
+        }
+      }
+
+      displaySummary
+    }
+  }
+#else
+  private func buildUserPrompt(
+    displaySummary: ChangeSummary,
+    fullSummary: ChangeSummary,
+    metadata: PromptMetadata,
+    isCompacted: Bool,
+    remainder: RemainderContext
+  ) -> PromptContent {
+    var lines: [String] = []
+
+    lines.append(metadata.promptContent.content)
+    lines.append(
+      "Totals: \(fullSummary.fileCount) files; +\(fullSummary.totalAdditions) / -\(fullSummary.totalDeletions)"
+    )
 
     if isCompacted {
-      "Context trimmed to stay within the model window; prioritize the most impactful changes."
+      lines.append(
+        "Context trimmed to stay within the model window; prioritize the most impactful changes."
+      )
     }
 
     if remainder.count > 0 {
-      "Showing first \(displaySummary.fileCount) files (of \(fullSummary.fileCount)); remaining \(remainder.count) files contribute +\(remainder.additions) / -\(remainder.deletions)."
+      lines.append(
+        "Showing first \(displaySummary.fileCount) files (of \(fullSummary.fileCount)); remaining \(remainder.count) files contribute +\(remainder.additions) / -\(remainder.deletions)."
+      )
 
       for entry in remainder.kindBreakdown.prefix(4) {
-        "  more: \(entry.count) \(entry.kind) file(s)"
+        lines.append("  more: \(entry.count) \(entry.kind) file(s)")
       }
 
       if remainder.generatedCount > 0 {
-        "  note: \(remainder.generatedCount) generated file(s) omitted per .gitattributes"
+        lines.append(
+          "  note: \(remainder.generatedCount) generated file(s) omitted per .gitattributes"
+        )
       }
 
       if !remainder.hintFiles.isEmpty {
         if remainder.remainingNonGeneratedCount > remainder.hintFiles.count {
-          "  showing \(remainder.hintFiles.count) representative paths:"
+          lines.append("  showing \(remainder.hintFiles.count) representative paths:")
         }
         for file in remainder.hintFiles {
           let descriptor = [
@@ -364,14 +497,16 @@ private func buildUserPrompt(
             file.isBinary ? "binary" : nil,
             file.isGenerated ? "generated" : nil,
           ].compactMap { $0 }.joined(separator: ", ")
-          "    • \(file.path) [\(descriptor)]"
+          lines.append("    • \(file.path) [\(descriptor)]")
         }
       }
     }
 
-    displaySummary
+    lines.append(contentsOf: displaySummary.promptLines())
+
+    return PromptContent(lines.joined(separator: "\n"))
   }
-}
+#endif
 
 private func trimSummary(
   _ summary: ChangeSummary,
