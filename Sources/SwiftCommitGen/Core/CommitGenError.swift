@@ -8,7 +8,6 @@ enum CommitGenError: Error {
   case modelUnavailable(reason: String)
   case modelTimedOut(timeout: TimeInterval)
   case modelGenerationFailed(message: String)
-  case llmRequestFailed(reason: String)
   case notImplemented
 }
 
@@ -31,8 +30,6 @@ extension CommitGenError: LocalizedError {
       "The on-device language model did not respond within \(formatSeconds(timeout)). Try again shortly or reduce the diff size."
     case .modelGenerationFailed(let message):
       message
-    case .llmRequestFailed(let reason):
-      "LLM request failed: \(reason)"
     case .notImplemented:
       "Commit generation is not implemented yet; future phases will add this capability."
     }

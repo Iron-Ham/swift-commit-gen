@@ -71,27 +71,6 @@ struct GenerateCommand: AsyncParsableCommand {
   )
   private var singleFile: Bool = false
 
-  /// Choose which LLM provider to use for generation.
-  @Option(
-    name: .long,
-    help: "Choose the LLM provider: foundationModels (macOS 26+) or ollama."
-  )
-  private var llmProvider: String?
-
-  /// Ollama model to use (only applicable when using Ollama provider).
-  @Option(
-    name: .long,
-    help: "Ollama model name (default: llama3.2)."
-  )
-  private var ollamaModel: String?
-
-  /// Ollama base URL (only applicable when using Ollama provider).
-  @Option(
-    name: .long,
-    help: "Ollama API base URL (default: http://localhost:11434)."
-  )
-  private var ollamaBaseURL: String?
-
   /// Resolves CLI flags, merges them with persisted defaults, and executes the
   /// commit generation tool end-to-end.
   func run() async throws {
@@ -130,48 +109,6 @@ struct GenerateCommand: AsyncParsableCommand {
     let generationMode: CommitGenOptions.GenerationMode =
       singleFile ? .perFile : configuredGenerationMode
 
-    // Resolve LLM provider
-    let resolvedLLMProvider: CommitGenOptions.LLMProvider
-    if let providerString = llmProvider {
-      switch providerString.lowercased() {
-      case "foundationmodels":
-        #if canImport(FoundationModels)
-          resolvedLLMProvider = .foundationModels
-        #else
-          throw ValidationError(
-            "FoundationModels is not available on this platform. Use 'ollama' instead."
-          )
-        #endif
-      case "ollama":
-        let model = ollamaModel ?? "llama3.2"
-        let baseURL = ollamaBaseURL ?? "http://localhost:11434"
-        resolvedLLMProvider = .ollama(model: model, baseURL: baseURL)
-      default:
-        throw ValidationError(
-          "Invalid LLM provider '\(providerString)'. Use 'foundationModels' or 'ollama'."
-        )
-      }
-    } else if let configuredProvider = userConfig.llmProvider {
-      // Use configured provider, but override ollama settings if provided via CLI
-      switch configuredProvider {
-      case .foundationModels:
-        resolvedLLMProvider = .foundationModels
-      case .ollama(let configModel, let configBaseURL):
-        let model = ollamaModel ?? configModel
-        let baseURL = ollamaBaseURL ?? configBaseURL
-        resolvedLLMProvider = .ollama(model: model, baseURL: baseURL)
-      }
-    } else {
-      // No provider specified, use platform default
-      #if canImport(FoundationModels)
-        resolvedLLMProvider = .foundationModels
-      #else
-        let model = ollamaModel ?? "llama3.2"
-        let baseURL = ollamaBaseURL ?? "http://localhost:11434"
-        resolvedLLMProvider = .ollama(model: model, baseURL: baseURL)
-      #endif
-    }
-
     let autoCommit = commit
     let stageAllBeforeGenerating = stagePreference ?? false
     let resolvedVerbose = verbosePreference ?? userConfig.defaultVerbose ?? false
@@ -181,7 +118,6 @@ struct GenerateCommand: AsyncParsableCommand {
     let autoStageIfNoStaged = stagePreference ?? configuredAutoStage
 
     let options = CommitGenOptions(
-      llmProvider: resolvedLLMProvider,
       outputFormat: outputFormat,
       promptStyle: .detailed,
       autoCommit: autoCommit,

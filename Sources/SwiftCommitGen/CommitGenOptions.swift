@@ -1,15 +1,7 @@
-#if canImport(FoundationModels)
-  @_weakLinked import FoundationModels
-#endif
+import FoundationModels
 
 /// Container for the resolved configuration driving a commit generation run.
 struct CommitGenOptions {
-  /// Supported LLM providers for commit generation.
-  enum LLMProvider: Codable, Equatable {
-    case foundationModels
-    case ollama(model: String, baseURL: String)
-  }
-
   /// Supported output formats for the rendered draft.
   enum OutputFormat: String, Codable {
     case text
@@ -17,14 +9,12 @@ struct CommitGenOptions {
   }
 
   /// Available prompt styles that influence how instructions are sent to the model.
-  enum PromptStyle: String, Codable {
+  enum PromptStyle: String, PromptRepresentable, Codable {
     case detailed
 
-    #if canImport(FoundationModels)
-      var promptRepresentation: Prompt {
-        Prompt { styleGuidance }
-      }
-    #endif
+    var promptRepresentation: Prompt {
+      Prompt { styleGuidance }
+    }
 
     var styleGuidance: String {
       "Style: use the body for a few short sentences covering rationale and impact; separate points with sentences rather than markdown bullets."
@@ -37,8 +27,6 @@ struct CommitGenOptions {
     case perFile
   }
 
-  /// LLM provider to use for commit generation.
-  var llmProvider: LLMProvider
   /// Desired format for logging or piping the generated draft.
   var outputFormat: OutputFormat
   /// Prompt template variant to use when communicating with the model.
