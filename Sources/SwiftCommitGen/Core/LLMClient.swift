@@ -139,9 +139,17 @@ struct LLMGenerationResult: Sendable {
         throw CommitGenError.modelUnavailable(reason: reason)
       }
 
+      // Convert PromptContent to FoundationModels types
+      guard let systemPromptContent = prompt.systemPrompt as? PromptContent,
+            let userPromptContent = prompt.userPrompt as? PromptContent else {
+        throw CommitGenError.invalidBackend(
+          "FoundationModels backend expected PromptContent but received: System: \(type(of: prompt.systemPrompt)), User: \(type(of: prompt.userPrompt))"
+        )
+      }
+
       let session = LanguageModelSession(
         model: model,
-        instructions: { prompt.systemPrompt as! Instructions }
+        instructions: { Instructions { systemPromptContent.content } }
       )
 
       var diagnostics = prompt.diagnostics
@@ -149,7 +157,7 @@ struct LLMGenerationResult: Sendable {
         generating: CommitDraft.self,
         options: generationOptions
       ) {
-        prompt.userPrompt as! Prompt
+        Prompt { userPromptContent.content }
       }
 
       let usage = analyzeTranscriptEntries(response.transcriptEntries)
@@ -295,11 +303,19 @@ struct OllamaClient: LLMClient {
 
     // Extract string content from prompts
     #if canImport(FoundationModels)
-      guard let systemContent = (prompt.systemPrompt as? PromptContent)?.content,
-        let userContent = (prompt.userPrompt as? PromptContent)?.content
-      else {
+      // When FoundationModels is available, prompts could be either PromptContent or FoundationModels types
+      // depending on macOS version and runtime availability
+      let systemContent: String
+      let userContent: String
+      
+      if let systemPromptContent = prompt.systemPrompt as? PromptContent,
+         let userPromptContent = prompt.userPrompt as? PromptContent {
+        systemContent = systemPromptContent.content
+        userContent = userPromptContent.content
+      } else {
+        // This should not happen if the builder correctly uses PromptContent for non-macOS 26+ systems
         throw CommitGenError.invalidBackend(
-          "Ollama backend requires PromptContent, but received FoundationModels types. Use FoundationModels backend instead."
+          "Ollama backend requires PromptContent, but received FoundationModels types (System: \(type(of: prompt.systemPrompt)), User: \(type(of: prompt.userPrompt))). Use FoundationModels backend instead."
         )
       }
     #else

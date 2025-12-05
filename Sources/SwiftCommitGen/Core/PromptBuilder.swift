@@ -49,6 +49,16 @@ struct PromptMetadata {
     includeUnstagedChanges ? "staged + unstaged changes" : "staged changes only"
   }
 
+  // Always available version for PromptContent
+  var asPromptContent: PromptContent {
+    PromptContent {
+      "Repository: \(repositoryName)"
+      "Branch: \(branchName)"
+      "Scope: \(scopeDescription)"
+      "Style: \(style.styleGuidance)"
+    }
+  }
+
   #if canImport(FoundationModels)
     @available(macOS 26.0, *)
     var promptRepresentation: Prompt {
@@ -61,12 +71,7 @@ struct PromptMetadata {
     }
   #else
     var promptContent: PromptContent {
-      PromptContent {
-        "Repository: \(repositoryName)"
-        "Branch: \(branchName)"
-        "Scope: \(scopeDescription)"
-        "Style: \(style.styleGuidance)"
-      }
+      asPromptContent
     }
   #endif
 }
@@ -307,114 +312,57 @@ struct DefaultPromptBuilder: PromptBuilder {
   }
 
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage {
-    #if canImport(FoundationModels)
-      if #available(macOS 26.0, *) {
-        let system = buildSystemPrompt(style: metadata.style)
+    // Always use PromptContent types - the LLM client will convert to FoundationModels types if needed
+    let system = buildSystemPromptAsContent(style: metadata.style)
 
-        var fileLimit = min(maxFiles, summary.fileCount)
-        var snippetLimit = adjustedSnippetLimit(
-          totalFiles: summary.fileCount,
-          configuredLimit: maxSnippetLines
-        )
+    var fileLimit = min(maxFiles, summary.fileCount)
+    var snippetLimit = adjustedSnippetLimit(
+      totalFiles: summary.fileCount,
+      configuredLimit: maxSnippetLines
+    )
 
-        var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
-        var remainderContext = makeRemainderContext(
-          fullSummary: summary,
-          displaySummary: displaySummary,
-          hintLimit: hintThreshold
-        )
-        var isCompacted =
-          displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+    var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+    var remainderContext = makeRemainderContext(
+      fullSummary: summary,
+      displaySummary: displaySummary,
+      hintLimit: hintThreshold
+    )
+    var isCompacted =
+      displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
-        var user = buildUserPrompt(
-          displaySummary: displaySummary,
-          fullSummary: summary,
-          metadata: metadata,
-          isCompacted: isCompacted,
-          remainder: remainderContext
-        )
+    var user = buildUserPromptAsContent(
+      displaySummary: displaySummary,
+      fullSummary: summary,
+      metadata: metadata,
+      isCompacted: isCompacted,
+      remainder: remainderContext
+    )
 
-        var estimate = estimatedLineCount(
-          displaySummary: displaySummary,
-          fullSummary: summary,
-          includesCompactionNote: isCompacted,
-          remainder: remainderContext
-        )
+    var estimate = estimatedLineCount(
+      displaySummary: displaySummary,
+      fullSummary: summary,
+      includesCompactionNote: isCompacted,
+      remainder: remainderContext
+    )
 
-        while estimate > maxPromptLineEstimate {
-          if snippetLimit > minSnippetLines {
-            snippetLimit = max(minSnippetLines, snippetLimit - snippetReductionStep)
-          } else if fileLimit > minFiles {
-            fileLimit = max(minFiles, fileLimit - 1)
-          } else {
-            break
-          }
-
-          displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
-          remainderContext = makeRemainderContext(
-            fullSummary: summary,
-            displaySummary: displaySummary,
-            hintLimit: hintThreshold
-          )
-          isCompacted =
-            displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
-
-          user = buildUserPrompt(
-            displaySummary: displaySummary,
-            fullSummary: summary,
-            metadata: metadata,
-            isCompacted: isCompacted,
-            remainder: remainderContext
-          )
-
-          estimate = estimatedLineCount(
-            displaySummary: displaySummary,
-            fullSummary: summary,
-            includesCompactionNote: isCompacted,
-            remainder: remainderContext
-          )
-        }
-
-        let finalCompaction =
-          displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
-
-        let diagnostics = makeDiagnostics(
-          metadata: metadata,
-          fullSummary: summary,
-          displaySummary: displaySummary,
-          snippetLimit: snippetLimit,
-          isCompacted: finalCompaction,
-          remainder: remainderContext,
-          estimatedLines: estimate,
-          lineBudget: maxPromptLineEstimate,
-          configuredFileLimit: maxFiles,
-          configuredSnippetLimit: maxSnippetLines,
-          hintLimit: hintThreshold
-        )
-
-        return PromptPackage(systemPrompt: system, userPrompt: user, diagnostics: diagnostics)
+    while estimate > maxPromptLineEstimate {
+      if snippetLimit > minSnippetLines {
+        snippetLimit = max(minSnippetLines, snippetLimit - snippetReductionStep)
+      } else if fileLimit > minFiles {
+        fileLimit = max(minFiles, fileLimit - 1)
       } else {
-        fatalError("FoundationModels backend requires macOS 26.0 or newer")
+        break
       }
-    #else
-      let system = buildSystemPrompt(style: metadata.style)
 
-      var fileLimit = min(maxFiles, summary.fileCount)
-      var snippetLimit = adjustedSnippetLimit(
-        totalFiles: summary.fileCount,
-        configuredLimit: maxSnippetLines
-      )
-
-      var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
-      var remainderContext = makeRemainderContext(
+      displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+      remainderContext = makeRemainderContext(
         fullSummary: summary,
         displaySummary: displaySummary,
         hintLimit: hintThreshold
       )
-      var isCompacted =
-        displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+      isCompacted = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
-      var user = buildUserPrompt(
+      user = buildUserPromptAsContent(
         displaySummary: displaySummary,
         fullSummary: summary,
         metadata: metadata,
@@ -422,65 +370,32 @@ struct DefaultPromptBuilder: PromptBuilder {
         remainder: remainderContext
       )
 
-      var estimate = estimatedLineCount(
+      estimate = estimatedLineCount(
         displaySummary: displaySummary,
         fullSummary: summary,
         includesCompactionNote: isCompacted,
         remainder: remainderContext
       )
+    }
 
-      while estimate > maxPromptLineEstimate {
-        if snippetLimit > minSnippetLines {
-          snippetLimit = max(minSnippetLines, snippetLimit - snippetReductionStep)
-        } else if fileLimit > minFiles {
-          fileLimit = max(minFiles, fileLimit - 1)
-        } else {
-          break
-        }
+    let finalCompaction =
+      displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
-        displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
-        remainderContext = makeRemainderContext(
-          fullSummary: summary,
-          displaySummary: displaySummary,
-          hintLimit: hintThreshold
-        )
-        isCompacted = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+    let diagnostics = makeDiagnostics(
+      metadata: metadata,
+      fullSummary: summary,
+      displaySummary: displaySummary,
+      snippetLimit: snippetLimit,
+      isCompacted: finalCompaction,
+      remainder: remainderContext,
+      estimatedLines: estimate,
+      lineBudget: maxPromptLineEstimate,
+      configuredFileLimit: maxFiles,
+      configuredSnippetLimit: maxSnippetLines,
+      hintLimit: hintThreshold
+    )
 
-        user = buildUserPrompt(
-          displaySummary: displaySummary,
-          fullSummary: summary,
-          metadata: metadata,
-          isCompacted: isCompacted,
-          remainder: remainderContext
-        )
-
-        estimate = estimatedLineCount(
-          displaySummary: displaySummary,
-          fullSummary: summary,
-          includesCompactionNote: isCompacted,
-          remainder: remainderContext
-        )
-      }
-
-      let finalCompaction =
-        displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
-
-      let diagnostics = makeDiagnostics(
-        metadata: metadata,
-        fullSummary: summary,
-        displaySummary: displaySummary,
-        snippetLimit: snippetLimit,
-        isCompacted: finalCompaction,
-        remainder: remainderContext,
-        estimatedLines: estimate,
-        lineBudget: maxPromptLineEstimate,
-        configuredFileLimit: maxFiles,
-        configuredSnippetLimit: maxSnippetLines,
-        hintLimit: hintThreshold
-      )
-
-      return PromptPackage(systemPrompt: system, userPrompt: user, diagnostics: diagnostics)
-    #endif
+    return PromptPackage(systemPrompt: system, userPrompt: user, diagnostics: diagnostics)
   }
 
   #if canImport(FoundationModels)
@@ -529,6 +444,29 @@ struct DefaultPromptBuilder: PromptBuilder {
       )
     }
   #endif
+
+  // Version that always returns PromptContent for use when FoundationModels is available but not macOS 26+
+  private func buildSystemPromptAsContent(style: CommitGenOptions.PromptStyle) -> PromptContent {
+    PromptContent(
+      """
+      You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description.
+      A changeset is given in the git diff output format, affecting one or multiple files.
+
+      The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history.
+      The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information.
+      The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.
+
+      Be brief and concise.
+
+      DO NOT include a description of changes in "lock" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.
+
+      When more explanation is helpful, provide a short body with full sentences.
+      Leave the body empty when the subject already captures the change or the context is unclear.
+
+      \(style.styleGuidance)
+      """
+    )
+  }
 
   private func adjustedSnippetLimit(totalFiles: Int, configuredLimit: Int) -> Int {
     var limit = configuredLimit
@@ -647,6 +585,63 @@ struct DefaultPromptBuilder: PromptBuilder {
     return PromptContent(lines.joined(separator: "\n"))
   }
 #endif
+
+// Version that always returns PromptContent for use when FoundationModels is available but not macOS 26+
+private func buildUserPromptAsContent(
+  displaySummary: ChangeSummary,
+  fullSummary: ChangeSummary,
+  metadata: PromptMetadata,
+  isCompacted: Bool,
+  remainder: RemainderContext
+) -> PromptContent {
+  var lines: [String] = []
+
+  lines.append(metadata.asPromptContent.content)
+  lines.append(
+    "Totals: \(fullSummary.fileCount) files; +\(fullSummary.totalAdditions) / -\(fullSummary.totalDeletions)"
+  )
+
+  if isCompacted {
+    lines.append(
+      "Context trimmed to stay within the model window; prioritize the most impactful changes."
+    )
+  }
+
+  if remainder.count > 0 {
+    lines.append(
+      "Showing first \(displaySummary.fileCount) files (of \(fullSummary.fileCount)); remaining \(remainder.count) files contribute +\(remainder.additions) / -\(remainder.deletions)."
+    )
+
+    for entry in remainder.kindBreakdown.prefix(4) {
+      lines.append("  more: \(entry.count) \(entry.kind) file(s)")
+    }
+
+    if remainder.generatedCount > 0 {
+      lines.append(
+        "  note: \(remainder.generatedCount) generated file(s) omitted per .gitattributes"
+      )
+    }
+
+    if !remainder.hintFiles.isEmpty {
+      if remainder.remainingNonGeneratedCount > remainder.hintFiles.count {
+        lines.append("  showing \(remainder.hintFiles.count) representative paths:")
+      }
+      for file in remainder.hintFiles {
+        let descriptor = [
+          file.kind,
+          locationDescription(file.location),
+          file.isBinary ? "binary" : nil,
+          file.isGenerated ? "generated" : nil,
+        ].compactMap { $0 }.joined(separator: ", ")
+        lines.append("    • \(file.path) [\(descriptor)]")
+      }
+    }
+  }
+
+  lines.append(contentsOf: displaySummary.promptLines())
+
+  return PromptContent(lines.joined(separator: "\n"))
+}
 
 private func trimSummary(
   _ summary: ChangeSummary,

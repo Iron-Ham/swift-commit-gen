@@ -57,118 +57,57 @@ struct BatchCombinationPromptBuilder {
       "Produce one final commit subject (<= 50 characters) and an optional body that summarizes the full change set. Avoid repeating the batch headings—present the combined commit message only."
     )
 
-    #if canImport(FoundationModels)
-      if #available(macOS 26.0, *) {
-        let userPrompt = Prompt {
-          for line in userLines {
-            line
-          }
-        }
+    // Always use PromptContent - LLM client will convert if needed
+    let userPrompt = PromptContent(userLines.joined(separator: "\n"))
 
-        let systemPrompt = Instructions {
-          """
-          You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
-          Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
-          The title should succinctly describe the change in a specific and informative manner.
-          Provide an optional body only when useful for additional context. 
-          If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
+    let systemPrompt = PromptContent(
+      """
+      You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
+      Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
+      The title should succinctly describe the change in a specific and informative manner.
+      Provide an optional body only when useful for additional context. 
+      If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
 
-          Be clear and concise, but do not omit critical information.
-          """
-          ""
-          metadata.style.styleGuidance
-        }
+      Be clear and concise, but do not omit critical information.
 
-        let characterCount = userLines.reduce(0) { $0 + $1.count + 1 }
-        let estimatedTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: characterCount)
-        let uniqueFiles = Set(sortedPartials.flatMap { $0.files }.map { $0.path })
-        let generatedFileCount = sortedPartials.flatMap { $0.files }.filter { $0.isGenerated }.count
+      \(metadata.style.styleGuidance)
+      """
+    )
 
-        let diagnostics = PromptDiagnostics(
-          estimatedLineCount: userLines.count,
-          lineBudget: 400,
-          estimatedTokenCount: estimatedTokens,
-          estimatedTokenLimit: 4_096,
-          totalFiles: uniqueFiles.count,
-          displayedFiles: uniqueFiles.count,
-          configuredFileLimit: uniqueFiles.count,
-          snippetLineLimit: 0,
-          configuredSnippetLineLimit: 0,
-          snippetFilesTruncated: 0,
-          compactionApplied: false,
-          generatedFilesTotal: generatedFileCount,
-          generatedFilesDisplayed: generatedFileCount,
-          fileUsages: sortedPartials.flatMap { $0.diagnostics.fileUsages },
-          remainderCount: 0,
-          remainderAdditions: 0,
-          remainderDeletions: 0,
-          remainderGeneratedCount: 0,
-          remainderKindBreakdown: [],
-          remainderHintLimit: 0,
-          remainderHintFiles: [],
-          remainderNonGeneratedCount: 0
-        )
+    let characterCount = userLines.reduce(0) { $0 + $1.count + 1 }
+    let estimatedTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: characterCount)
+    let uniqueFiles = Set(sortedPartials.flatMap { $0.files }.map { $0.path })
+    let generatedFileCount = sortedPartials.flatMap { $0.files }.filter { $0.isGenerated }.count
 
-        return PromptPackage(
-          systemPrompt: systemPrompt,
-          userPrompt: userPrompt,
-          diagnostics: diagnostics
-        )
-      } else {
-        fatalError("FoundationModels backend requires macOS 26.0 or newer")
-      }
-    #else
-      let userPrompt = PromptContent(userLines.joined(separator: "\n"))
+    let diagnostics = PromptDiagnostics(
+      estimatedLineCount: userLines.count,
+      lineBudget: 400,
+      estimatedTokenCount: estimatedTokens,
+      estimatedTokenLimit: 4_096,
+      totalFiles: uniqueFiles.count,
+      displayedFiles: uniqueFiles.count,
+      configuredFileLimit: uniqueFiles.count,
+      snippetLineLimit: 0,
+      configuredSnippetLineLimit: 0,
+      snippetFilesTruncated: 0,
+      compactionApplied: false,
+      generatedFilesTotal: generatedFileCount,
+      generatedFilesDisplayed: generatedFileCount,
+      fileUsages: sortedPartials.flatMap { $0.diagnostics.fileUsages },
+      remainderCount: 0,
+      remainderAdditions: 0,
+      remainderDeletions: 0,
+      remainderGeneratedCount: 0,
+      remainderKindBreakdown: [],
+      remainderHintLimit: 0,
+      remainderHintFiles: [],
+      remainderNonGeneratedCount: 0
+    )
 
-      let systemPrompt = PromptContent(
-        """
-        You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
-        Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
-        The title should succinctly describe the change in a specific and informative manner.
-        Provide an optional body only when useful for additional context. 
-        If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
-
-        Be clear and concise, but do not omit critical information.
-
-        \(metadata.style.styleGuidance)
-        """
-      )
-
-      let characterCount = userLines.reduce(0) { $0 + $1.count + 1 }
-      let estimatedTokens = PromptDiagnostics.tokenEstimate(forCharacterCount: characterCount)
-      let uniqueFiles = Set(sortedPartials.flatMap { $0.files }.map { $0.path })
-      let generatedFileCount = sortedPartials.flatMap { $0.files }.filter { $0.isGenerated }.count
-
-      let diagnostics = PromptDiagnostics(
-        estimatedLineCount: userLines.count,
-        lineBudget: 400,
-        estimatedTokenCount: estimatedTokens,
-        estimatedTokenLimit: 4_096,
-        totalFiles: uniqueFiles.count,
-        displayedFiles: uniqueFiles.count,
-        configuredFileLimit: uniqueFiles.count,
-        snippetLineLimit: 0,
-        configuredSnippetLineLimit: 0,
-        snippetFilesTruncated: 0,
-        compactionApplied: false,
-        generatedFilesTotal: generatedFileCount,
-        generatedFilesDisplayed: generatedFileCount,
-        fileUsages: sortedPartials.flatMap { $0.diagnostics.fileUsages },
-        remainderCount: 0,
-        remainderAdditions: 0,
-        remainderDeletions: 0,
-        remainderGeneratedCount: 0,
-        remainderKindBreakdown: [],
-        remainderHintLimit: 0,
-        remainderHintFiles: [],
-        remainderNonGeneratedCount: 0
-      )
-
-      return PromptPackage(
-        systemPrompt: systemPrompt,
-        userPrompt: userPrompt,
-        diagnostics: diagnostics
-      )
-    #endif
+    return PromptPackage(
+      systemPrompt: systemPrompt,
+      userPrompt: userPrompt,
+      diagnostics: diagnostics
+    )
   }
 }
