@@ -9,6 +9,7 @@ enum CommitGenError: Error {
   case modelTimedOut(timeout: TimeInterval)
   case modelGenerationFailed(message: String)
   case llmRequestFailed(reason: String)
+  case invalidBackend(String)
   case notImplemented
 }
 
@@ -33,6 +34,8 @@ extension CommitGenError: LocalizedError {
       message
     case .llmRequestFailed(let reason):
       "LLM request failed: \(reason)"
+    case .invalidBackend(let message):
+      message
     case .notImplemented:
       "Commit generation is not implemented yet; future phases will add this capability."
     }

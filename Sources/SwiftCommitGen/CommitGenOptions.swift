@@ -21,6 +21,7 @@ struct CommitGenOptions {
     case detailed
 
     #if canImport(FoundationModels)
+      @available(macOS 26.0, *)
       var promptRepresentation: Prompt {
         Prompt { styleGuidance }
       }

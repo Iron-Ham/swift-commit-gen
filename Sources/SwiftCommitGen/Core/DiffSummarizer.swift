@@ -53,6 +53,7 @@ struct ChangeSummary: Hashable, Codable {
     }
 
     #if canImport(FoundationModels)
+      @available(macOS 26.0, *)
       var promptRepresentation: Prompt {
         Prompt {
           for line in promptLines() {
@@ -198,6 +199,7 @@ struct ChangeSummary: Hashable, Codable {
   }
 
   #if canImport(FoundationModels)
+    @available(macOS 26.0, *)
     var promptRepresentation: Prompt {
       Prompt {
         for line in promptLines() {

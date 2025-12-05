@@ -72,7 +72,11 @@ struct CommitGenTool {
         self.llmClient = OllamaClient(configuration: config)
       #if canImport(FoundationModels)
         case .foundationModels:
-          self.llmClient = FoundationModelsClient()
+          if #available(macOS 26.0, *) {
+            self.llmClient = FoundationModelsClient()
+          } else {
+            fatalError("FoundationModels backend requires macOS 26.0 or newer")
+          }
       #else
         case .foundationModels:
           fatalError("FoundationModels is not available on this platform")

@@ -50,6 +50,7 @@ struct PromptMetadata {
   }
 
   #if canImport(FoundationModels)
+    @available(macOS 26.0, *)
     var promptRepresentation: Prompt {
       Prompt {
         "Repository: \(repositoryName)"
@@ -166,8 +167,8 @@ struct PromptDiagnostics: Codable, Sendable {
 /// Bundles the full prompt payload and derived diagnostics for a generation request.
 struct PromptPackage {
   #if canImport(FoundationModels)
-    var systemPrompt: Instructions
-    var userPrompt: Prompt
+    var systemPrompt: Any  // Instructions on macOS 26+, PromptContent otherwise
+    var userPrompt: Any  // Prompt on macOS 26+, PromptContent otherwise
   #else
     var systemPrompt: PromptContent
     var userPrompt: PromptContent
@@ -185,11 +186,56 @@ struct PromptPackage {
     let additionalLines = contextLineCount + 2  // blank separator + heading
 
     #if canImport(FoundationModels)
-      let augmentedUserPrompt = Prompt {
-        userPrompt
-        ""
-        "Additional context from user:"
-        trimmed
+      if #available(macOS 26.0, *) {
+        let augmentedUserPrompt = Prompt {
+          userPrompt as! Prompt
+          ""
+          "Additional context from user:"
+          trimmed
+        }
+
+        var updatedDiagnostics = diagnostics
+        let additionalCharacters =
+          trimmed.count
+          + "Additional context from user:".count
+        let newlineCharacters = additionalLines  // account for line breaks
+        updatedDiagnostics.recordAdditionalUserContext(
+          lineCount: additionalLines,
+          characterCount: additionalCharacters + newlineCharacters
+        )
+
+        return PromptPackage(
+          systemPrompt: systemPrompt,
+          userPrompt: augmentedUserPrompt,
+          diagnostics: updatedDiagnostics
+        )
+      } else {
+        // For macOS < 26, fall through to PromptContent handling
+        let promptContent = userPrompt as! PromptContent
+        let augmentedUserPrompt = PromptContent(
+          """
+          \(promptContent.content)
+
+          Additional context from user:
+          \(trimmed)
+          """
+        )
+
+        var updatedDiagnostics = diagnostics
+        let additionalCharacters =
+          trimmed.count
+          + "Additional context from user:".count
+        let newlineCharacters = additionalLines
+        updatedDiagnostics.recordAdditionalUserContext(
+          lineCount: additionalLines,
+          characterCount: additionalCharacters + newlineCharacters
+        )
+
+        return PromptPackage(
+          systemPrompt: systemPrompt,
+          userPrompt: augmentedUserPrompt,
+          diagnostics: updatedDiagnostics
+        )
       }
     #else
       let augmentedUserPrompt = PromptContent(
@@ -200,23 +246,23 @@ struct PromptPackage {
         \(trimmed)
         """
       )
+
+      var updatedDiagnostics = diagnostics
+      let additionalCharacters =
+        trimmed.count
+        + "Additional context from user:".count
+      let newlineCharacters = additionalLines  // account for line breaks
+      updatedDiagnostics.recordAdditionalUserContext(
+        lineCount: additionalLines,
+        characterCount: additionalCharacters + newlineCharacters
+      )
+
+      return PromptPackage(
+        systemPrompt: systemPrompt,
+        userPrompt: augmentedUserPrompt,
+        diagnostics: updatedDiagnostics
+      )
     #endif
-
-    var updatedDiagnostics = diagnostics
-    let additionalCharacters =
-      trimmed.count
-      + "Additional context from user:".count
-    let newlineCharacters = additionalLines  // account for line breaks
-    updatedDiagnostics.recordAdditionalUserContext(
-      lineCount: additionalLines,
-      characterCount: additionalCharacters + newlineCharacters
-    )
-
-    return PromptPackage(
-      systemPrompt: systemPrompt,
-      userPrompt: augmentedUserPrompt,
-      diagnostics: updatedDiagnostics
-    )
   }
 }
 
@@ -261,55 +307,114 @@ struct DefaultPromptBuilder: PromptBuilder {
   }
 
   func makePrompt(summary: ChangeSummary, metadata: PromptMetadata) -> PromptPackage {
-    let system = buildSystemPrompt(style: metadata.style)
+    #if canImport(FoundationModels)
+      if #available(macOS 26.0, *) {
+        let system = buildSystemPrompt(style: metadata.style)
 
-    var fileLimit = min(maxFiles, summary.fileCount)
-    var snippetLimit = adjustedSnippetLimit(
-      totalFiles: summary.fileCount,
-      configuredLimit: maxSnippetLines
-    )
+        var fileLimit = min(maxFiles, summary.fileCount)
+        var snippetLimit = adjustedSnippetLimit(
+          totalFiles: summary.fileCount,
+          configuredLimit: maxSnippetLines
+        )
 
-    var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
-    var remainderContext = makeRemainderContext(
-      fullSummary: summary,
-      displaySummary: displaySummary,
-      hintLimit: hintThreshold
-    )
-    var isCompacted = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+        var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+        var remainderContext = makeRemainderContext(
+          fullSummary: summary,
+          displaySummary: displaySummary,
+          hintLimit: hintThreshold
+        )
+        var isCompacted =
+          displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
-    var user = buildUserPrompt(
-      displaySummary: displaySummary,
-      fullSummary: summary,
-      metadata: metadata,
-      isCompacted: isCompacted,
-      remainder: remainderContext
-    )
+        var user = buildUserPrompt(
+          displaySummary: displaySummary,
+          fullSummary: summary,
+          metadata: metadata,
+          isCompacted: isCompacted,
+          remainder: remainderContext
+        )
 
-    var estimate = estimatedLineCount(
-      displaySummary: displaySummary,
-      fullSummary: summary,
-      includesCompactionNote: isCompacted,
-      remainder: remainderContext
-    )
+        var estimate = estimatedLineCount(
+          displaySummary: displaySummary,
+          fullSummary: summary,
+          includesCompactionNote: isCompacted,
+          remainder: remainderContext
+        )
 
-    while estimate > maxPromptLineEstimate {
-      if snippetLimit > minSnippetLines {
-        snippetLimit = max(minSnippetLines, snippetLimit - snippetReductionStep)
-      } else if fileLimit > minFiles {
-        fileLimit = max(minFiles, fileLimit - 1)
+        while estimate > maxPromptLineEstimate {
+          if snippetLimit > minSnippetLines {
+            snippetLimit = max(minSnippetLines, snippetLimit - snippetReductionStep)
+          } else if fileLimit > minFiles {
+            fileLimit = max(minFiles, fileLimit - 1)
+          } else {
+            break
+          }
+
+          displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+          remainderContext = makeRemainderContext(
+            fullSummary: summary,
+            displaySummary: displaySummary,
+            hintLimit: hintThreshold
+          )
+          isCompacted =
+            displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+
+          user = buildUserPrompt(
+            displaySummary: displaySummary,
+            fullSummary: summary,
+            metadata: metadata,
+            isCompacted: isCompacted,
+            remainder: remainderContext
+          )
+
+          estimate = estimatedLineCount(
+            displaySummary: displaySummary,
+            fullSummary: summary,
+            includesCompactionNote: isCompacted,
+            remainder: remainderContext
+          )
+        }
+
+        let finalCompaction =
+          displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+
+        let diagnostics = makeDiagnostics(
+          metadata: metadata,
+          fullSummary: summary,
+          displaySummary: displaySummary,
+          snippetLimit: snippetLimit,
+          isCompacted: finalCompaction,
+          remainder: remainderContext,
+          estimatedLines: estimate,
+          lineBudget: maxPromptLineEstimate,
+          configuredFileLimit: maxFiles,
+          configuredSnippetLimit: maxSnippetLines,
+          hintLimit: hintThreshold
+        )
+
+        return PromptPackage(systemPrompt: system, userPrompt: user, diagnostics: diagnostics)
       } else {
-        break
+        fatalError("FoundationModels backend requires macOS 26.0 or newer")
       }
+    #else
+      let system = buildSystemPrompt(style: metadata.style)
 
-      displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
-      remainderContext = makeRemainderContext(
+      var fileLimit = min(maxFiles, summary.fileCount)
+      var snippetLimit = adjustedSnippetLimit(
+        totalFiles: summary.fileCount,
+        configuredLimit: maxSnippetLines
+      )
+
+      var displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+      var remainderContext = makeRemainderContext(
         fullSummary: summary,
         displaySummary: displaySummary,
         hintLimit: hintThreshold
       )
-      isCompacted = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+      var isCompacted =
+        displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
-      user = buildUserPrompt(
+      var user = buildUserPrompt(
         displaySummary: displaySummary,
         fullSummary: summary,
         metadata: metadata,
@@ -317,35 +422,69 @@ struct DefaultPromptBuilder: PromptBuilder {
         remainder: remainderContext
       )
 
-      estimate = estimatedLineCount(
+      var estimate = estimatedLineCount(
         displaySummary: displaySummary,
         fullSummary: summary,
         includesCompactionNote: isCompacted,
         remainder: remainderContext
       )
-    }
 
-    let finalCompaction =
-      displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+      while estimate > maxPromptLineEstimate {
+        if snippetLimit > minSnippetLines {
+          snippetLimit = max(minSnippetLines, snippetLimit - snippetReductionStep)
+        } else if fileLimit > minFiles {
+          fileLimit = max(minFiles, fileLimit - 1)
+        } else {
+          break
+        }
 
-    let diagnostics = makeDiagnostics(
-      metadata: metadata,
-      fullSummary: summary,
-      displaySummary: displaySummary,
-      snippetLimit: snippetLimit,
-      isCompacted: finalCompaction,
-      remainder: remainderContext,
-      estimatedLines: estimate,
-      lineBudget: maxPromptLineEstimate,
-      configuredFileLimit: maxFiles,
-      configuredSnippetLimit: maxSnippetLines,
-      hintLimit: hintThreshold
-    )
+        displaySummary = trimSummary(summary, fileLimit: fileLimit, snippetLimit: snippetLimit)
+        remainderContext = makeRemainderContext(
+          fullSummary: summary,
+          displaySummary: displaySummary,
+          hintLimit: hintThreshold
+        )
+        isCompacted = displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
 
-    return PromptPackage(systemPrompt: system, userPrompt: user, diagnostics: diagnostics)
+        user = buildUserPrompt(
+          displaySummary: displaySummary,
+          fullSummary: summary,
+          metadata: metadata,
+          isCompacted: isCompacted,
+          remainder: remainderContext
+        )
+
+        estimate = estimatedLineCount(
+          displaySummary: displaySummary,
+          fullSummary: summary,
+          includesCompactionNote: isCompacted,
+          remainder: remainderContext
+        )
+      }
+
+      let finalCompaction =
+        displaySummary.fileCount < summary.fileCount || snippetLimit < maxSnippetLines
+
+      let diagnostics = makeDiagnostics(
+        metadata: metadata,
+        fullSummary: summary,
+        displaySummary: displaySummary,
+        snippetLimit: snippetLimit,
+        isCompacted: finalCompaction,
+        remainder: remainderContext,
+        estimatedLines: estimate,
+        lineBudget: maxPromptLineEstimate,
+        configuredFileLimit: maxFiles,
+        configuredSnippetLimit: maxSnippetLines,
+        hintLimit: hintThreshold
+      )
+
+      return PromptPackage(systemPrompt: system, userPrompt: user, diagnostics: diagnostics)
+    #endif
   }
 
   #if canImport(FoundationModels)
+    @available(macOS 26.0, *)
     private func buildSystemPrompt(style: CommitGenOptions.PromptStyle) -> Instructions {
       Instructions {
         """
@@ -405,6 +544,7 @@ struct DefaultPromptBuilder: PromptBuilder {
 }
 
 #if canImport(FoundationModels)
+  @available(macOS 26.0, *)
   private func buildUserPrompt(
     displaySummary: ChangeSummary,
     fullSummary: ChangeSummary,
@@ -413,7 +553,7 @@ struct DefaultPromptBuilder: PromptBuilder {
     remainder: RemainderContext
   ) -> Prompt {
     Prompt {
-      metadata
+      metadata.promptRepresentation
       "Totals: \(fullSummary.fileCount) files; +\(fullSummary.totalAdditions) / -\(fullSummary.totalDeletions)"
 
       if isCompacted {
@@ -447,7 +587,7 @@ struct DefaultPromptBuilder: PromptBuilder {
         }
       }
 
-      displaySummary
+      displaySummary.promptRepresentation
     }
   }
 #else

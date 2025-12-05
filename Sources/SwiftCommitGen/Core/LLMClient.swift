@@ -9,25 +9,9 @@ protocol LLMClient {
   func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult
 }
 
-#if canImport(FoundationModels)
-  @Generable(description: "A commit for changes made in a git repository.")
-#endif
 /// Model representation for the subject/body pair returned by the language model.
 struct CommitDraft: Hashable, Codable, Sendable {
-  #if canImport(FoundationModels)
-    @Guide(
-      description:
-        "The title of a commit. It should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history. It should describe WHAT was changed."
-    )
-  #endif
   var subject: String
-
-  #if canImport(FoundationModels)
-    @Guide(
-      description:
-        "A detailed description of the the purposes of the changes. It should describe WHY the changes were made."
-    )
-  #endif
   var body: String?
 
   init(subject: String = "", body: String? = nil) {
@@ -77,6 +61,35 @@ struct CommitDraft: Hashable, Codable, Sendable {
   }
 }
 
+#if canImport(FoundationModels)
+  @available(macOS 26.0, *)
+  extension CommitDraft: Generable {
+    static var generationSchema: GenerationSchema {
+      GenerationSchema(
+        type: Self.self,
+        description: "A commit for changes made in a git repository.",
+        properties: [
+          .init(name: "subject", type: String.self),
+          .init(name: "body", type: String?.self),
+        ]
+      )
+    }
+
+    init(_ content: GeneratedContent) throws {
+      self.subject = try content.value(forProperty: "subject")
+      self.body = try content.value(forProperty: "body")
+    }
+
+    var generatedContent: GeneratedContent {
+      var props: [(String, any ConvertibleToGeneratedContent)] = [("subject", subject)]
+      if let body = body {
+        props.append(("body", body))
+      }
+      return GeneratedContent(properties: props, uniquingKeysWith: { _, second in second })
+    }
+  }
+#endif
+
 /// Wraps a generated draft alongside diagnostics gathered during inference.
 struct LLMGenerationResult: Sendable {
   var draft: CommitDraft
@@ -85,6 +98,7 @@ struct LLMGenerationResult: Sendable {
 
 #if canImport(FoundationModels)
   /// Concrete LLM client backed by Apple's FoundationModels framework.
+  @available(macOS 26.0, *)
   struct FoundationModelsClient: LLMClient {
     /// Controls retry behavior and timeouts for generation requests.
     struct Configuration {
@@ -127,7 +141,7 @@ struct LLMGenerationResult: Sendable {
 
       let session = LanguageModelSession(
         model: model,
-        instructions: prompt.systemPrompt
+        instructions: { prompt.systemPrompt as! Instructions }
       )
 
       var diagnostics = prompt.diagnostics
@@ -135,7 +149,7 @@ struct LLMGenerationResult: Sendable {
         generating: CommitDraft.self,
         options: generationOptions
       ) {
-        prompt.userPrompt
+        prompt.userPrompt as! Prompt
       }
 
       let usage = analyzeTranscriptEntries(response.transcriptEntries)
@@ -279,16 +293,30 @@ struct OllamaClient: LLMClient {
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+    // Extract string content from prompts
+    #if canImport(FoundationModels)
+      guard let systemContent = (prompt.systemPrompt as? PromptContent)?.content,
+        let userContent = (prompt.userPrompt as? PromptContent)?.content
+      else {
+        throw CommitGenError.invalidBackend(
+          "Ollama backend requires PromptContent, but received FoundationModels types. Use FoundationModels backend instead."
+        )
+      }
+    #else
+      let systemContent = prompt.systemPrompt.content
+      let userContent = prompt.userPrompt.content
+    #endif
+
     // Structure the messages properly
     let messages: [[String: String]] = [
       [
         "role": "system",
-        "content": prompt.systemPrompt.content,
+        "content": systemContent,
       ],
       [
         "role": "user",
         "content": """
-        \(prompt.userPrompt.content)
+        \(userContent)
 
         IMPORTANT: You must respond with ONLY valid JSON in this exact format, with no additional text before or after:
         {
@@ -314,8 +342,8 @@ struct OllamaClient: LLMClient {
 
     // Log the request if verbose logging is enabled
     configuration.logger?.debug {
-      let systemPreview = prompt.systemPrompt.content.prefix(200)
-      let userPreview = prompt.userPrompt.content.prefix(800)
+      let systemPreview = systemContent.prefix(200)
+      let userPreview = userContent.prefix(800)
       return """
         📤 Ollama Request to \(configuration.model):
         ┌─ System Prompt (first 200 chars):
@@ -367,7 +395,7 @@ struct OllamaClient: LLMClient {
       promptTokens = promptEvalCount
     } else {
       promptTokens = PromptDiagnostics.tokenEstimate(
-        forCharacterCount: prompt.systemPrompt.content.count + prompt.userPrompt.content.count
+        forCharacterCount: systemContent.count + userContent.count
       )
     }
 
