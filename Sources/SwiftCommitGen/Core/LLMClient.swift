@@ -141,7 +141,8 @@ struct LLMGenerationResult: Sendable {
 
       // Convert PromptContent to FoundationModels types
       guard let systemPromptContent = prompt.systemPrompt as? PromptContent,
-            let userPromptContent = prompt.userPrompt as? PromptContent else {
+        let userPromptContent = prompt.userPrompt as? PromptContent
+      else {
         throw CommitGenError.invalidBackend(
           "FoundationModels backend expected PromptContent but received: System: \(type(of: prompt.systemPrompt)), User: \(type(of: prompt.userPrompt))"
         )
@@ -307,9 +308,10 @@ struct OllamaClient: LLMClient {
       // depending on macOS version and runtime availability
       let systemContent: String
       let userContent: String
-      
+
       if let systemPromptContent = prompt.systemPrompt as? PromptContent,
-         let userPromptContent = prompt.userPrompt as? PromptContent {
+        let userPromptContent = prompt.userPrompt as? PromptContent
+      {
         systemContent = systemPromptContent.content
         userContent = userPromptContent.content
       } else {
