@@ -1,5 +1,17 @@
 import FoundationModels
 
+/// Configuration for git diff command behavior.
+struct DiffOptions: Codable, Hashable {
+  /// Include entire functions containing changes for better semantic context.
+  var useFunctionContext: Bool = true
+  /// Detect renamed and copied files rather than showing as delete + add.
+  var detectRenamesCopies: Bool = true
+  /// Number of context lines around changes. Uses git default (3) when nil.
+  var contextLines: Int? = nil
+
+  static let `default` = DiffOptions()
+}
+
 /// Container for the resolved configuration driving a commit generation run.
 struct CommitGenOptions {
   /// Supported output formats for the rendered draft.
@@ -43,4 +55,6 @@ struct CommitGenOptions {
   var isQuiet: Bool
   /// Controls whether batching happens automatically or per file.
   var generationMode: GenerationMode
+  /// Configuration for git diff command behavior.
+  var diffOptions: DiffOptions
 }

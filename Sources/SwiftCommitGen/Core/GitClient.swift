@@ -119,8 +119,8 @@ struct GitStatus {
 protocol GitClient {
   func repositoryRoot() async throws -> URL
   func status() async throws -> GitStatus
-  func diffStaged() async throws -> String
-  func diffUnstaged() async throws -> String
+  func diffStaged(options: DiffOptions) async throws -> String
+  func diffUnstaged(options: DiffOptions) async throws -> String
   func listChangedFiles(scope: GitChangeScope) async throws -> [GitFileChange]
   func currentBranch() async throws -> String
   func stage(paths: [String]) async throws
@@ -158,14 +158,32 @@ struct SystemGitClient: GitClient {
     return GitStatusParser.parse(output)
   }
 
-  func diffStaged() async throws -> String {
+  func diffStaged(options: DiffOptions) async throws -> String {
     _ = try await repositoryRoot()
-    return try runGit(["diff", "--cached", "--no-color"])
+    return try runGit(buildDiffArgs(staged: true, options: options))
   }
 
-  func diffUnstaged() async throws -> String {
+  func diffUnstaged(options: DiffOptions) async throws -> String {
     _ = try await repositoryRoot()
-    return try runGit(["diff", "--no-color"])
+    return try runGit(buildDiffArgs(staged: false, options: options))
+  }
+
+  private func buildDiffArgs(staged: Bool, options: DiffOptions) -> [String] {
+    var args = ["diff"]
+    if staged {
+      args.append("--cached")
+    }
+    args.append("--no-color")
+    if options.useFunctionContext {
+      args.append("--function-context")
+    }
+    if options.detectRenamesCopies {
+      args.append(contentsOf: ["-M", "-C"])
+    }
+    if let contextLines = options.contextLines {
+      args.append("-U\(contextLines)")
+    }
+    return args
   }
 
   func listChangedFiles(scope: GitChangeScope) async throws -> [GitFileChange] {
@@ -256,10 +274,13 @@ struct SystemGitClient: GitClient {
       throw CommitGenError.gitCommandFailed(message: error.localizedDescription)
     }
 
-    process.waitUntilExit()
-
+    // IMPORTANT: Read from pipes BEFORE waiting for exit to avoid deadlock.
+    // If the output exceeds the pipe buffer (~64KB), the process will block
+    // waiting to write more data, causing a deadlock if we wait for exit first.
     let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
     let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+
+    process.waitUntilExit()
 
     guard process.terminationStatus == 0 else {
       let stderr = String(data: stderrData, encoding: .utf8) ?? ""

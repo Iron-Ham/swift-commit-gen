@@ -183,16 +183,16 @@ struct DefaultPromptBuilder: PromptBuilder {
 
   init(
     maxFiles: Int = 12,
-    maxSnippetLines: Int = 6,
+    maxSnippetLines: Int = 25,
     maxPromptLineEstimate: Int = 400,
     minFiles: Int = 3,
-    minSnippetLines: Int = 0,
-    snippetReductionStep: Int = 2,
+    minSnippetLines: Int = 6,
+    snippetReductionStep: Int = 4,
     hintThreshold: Int = 10,
     mediumFileThreshold: Int = 20,
     highFileThreshold: Int = 40,
-    mediumSnippetLimit: Int = 4,
-    lowSnippetLimit: Int = 2
+    mediumSnippetLimit: Int = 15,
+    lowSnippetLimit: Int = 8
   ) {
     self.maxFiles = maxFiles
     self.maxSnippetLines = maxSnippetLines

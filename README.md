@@ -123,6 +123,11 @@ scg generate [OPTIONS]
 | `--quiet` | `-q` | Suppress routine info lines | Off | Hides `[INFO]` but keeps `[NOTICE]`, warnings, errors. Ignored if `--verbose` is present. |
 | `--no-quiet` |  | Ensure quiet mode is disabled, even if configured | - | Helpful when scripts need full output. |
 | `--single-file` |  | Analyze each file independently and then combine per-file drafts | Off | Sends a larger diff slice per file, useful when you need high-fidelity summaries. |
+| `--function-context` |  | Include entire functions containing changes in the diff | On | Provides better semantic context for the AI model. |
+| `--no-function-context` |  | Disable function context in diffs | - | May reduce diff size for very large changesets. |
+| `--detect-renames` |  | Detect renamed and copied files in diffs | On | Shows moves as renames rather than delete + add. |
+| `--no-detect-renames` |  | Disable rename/copy detection | - | Use raw add/delete representation. |
+| `--context-lines <n>` |  | Number of context lines around changes | `3` | Higher values give more surrounding code context. |
 
 ### Verbosity Levels
 
@@ -174,6 +179,12 @@ Request high-fidelity per-file drafts before they are combined:
 scg --single-file
 ```
 
+Generate with more context lines and disabled function context (for very large diffs):
+
+```sh
+scg --context-lines 5 --no-function-context
+```
+
 Configuration Defaults
 ----------------------
 Use the `config` subcommand to inspect or update stored defaults. Running it with no flags opens an interactive, colorized editor that walks through each preference:
@@ -193,6 +204,14 @@ Available options:
 | `--clear-verbose` | Remove the stored verbose preference. |
 | `--quiet <true\|false>` | Set the default quiet logging preference. |
 | `--clear-quiet` | Remove the stored quiet preference. |
+| `--mode <automatic\|per-file>` | Set the default generation mode. |
+| `--clear-mode` | Remove the stored generation mode preference. |
+| `--function-context <true\|false>` | Set whether to include entire functions in diffs. |
+| `--clear-function-context` | Remove the stored function-context preference. |
+| `--detect-renames <true\|false>` | Set whether to detect renamed/copied files in diffs. |
+| `--clear-detect-renames` | Remove the stored detect-renames preference. |
+| `--context-lines <n>` | Set the default number of context lines around changes. |
+| `--clear-context-lines` | Remove the stored context-lines preference. |
 
 When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/scg/config.json`.
 

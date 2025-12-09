@@ -71,6 +71,41 @@ struct GenerateCommand: AsyncParsableCommand {
   )
   private var singleFile: Bool = false
 
+  /// Includes entire functions containing changes for better semantic context.
+  @Flag(
+    name: .customLong("function-context"),
+    help: "Include entire functions containing changes in the diff (default: enabled)."
+  )
+  private var functionContext: Bool = false
+
+  /// Explicitly disables function context even when enabled by default.
+  @Flag(
+    name: .customLong("no-function-context"),
+    help: "Disable function context in diffs."
+  )
+  private var noFunctionContext: Bool = false
+
+  /// Enables detection of renamed and copied files in the diff.
+  @Flag(
+    name: .customLong("detect-renames"),
+    help: "Detect renamed and copied files in diffs (default: enabled)."
+  )
+  private var detectRenames: Bool = false
+
+  /// Explicitly disables rename/copy detection.
+  @Flag(
+    name: .customLong("no-detect-renames"),
+    help: "Disable rename/copy detection in diffs."
+  )
+  private var noDetectRenames: Bool = false
+
+  /// Number of context lines to show around changes.
+  @Option(
+    name: .customLong("context-lines"),
+    help: "Number of context lines around changes (default: 3)."
+  )
+  private var contextLines: Int?
+
   /// Resolves CLI flags, merges them with persisted defaults, and executes the
   /// commit generation tool end-to-end.
   func run() async throws {
@@ -117,6 +152,33 @@ struct GenerateCommand: AsyncParsableCommand {
     let configuredAutoStage = userConfig.autoStageIfNoStaged ?? false
     let autoStageIfNoStaged = stagePreference ?? configuredAutoStage
 
+    // Resolve diff options (CLI flags override config, config overrides defaults)
+    let useFunctionContext: Bool
+    if functionContext {
+      useFunctionContext = true
+    } else if noFunctionContext {
+      useFunctionContext = false
+    } else {
+      useFunctionContext = userConfig.defaultFunctionContext ?? true
+    }
+
+    let useDetectRenames: Bool
+    if detectRenames {
+      useDetectRenames = true
+    } else if noDetectRenames {
+      useDetectRenames = false
+    } else {
+      useDetectRenames = userConfig.defaultDetectRenames ?? true
+    }
+
+    let resolvedContextLines = contextLines ?? userConfig.defaultContextLines
+
+    let diffOptions = DiffOptions(
+      useFunctionContext: useFunctionContext,
+      detectRenamesCopies: useDetectRenames,
+      contextLines: resolvedContextLines
+    )
+
     let options = CommitGenOptions(
       outputFormat: outputFormat,
       promptStyle: .detailed,
@@ -125,7 +187,8 @@ struct GenerateCommand: AsyncParsableCommand {
       autoStageIfNoStaged: autoStageIfNoStaged,
       isVerbose: resolvedVerbose,
       isQuiet: effectiveQuiet,
-      generationMode: generationMode
+      generationMode: generationMode,
+      diffOptions: diffOptions
     )
 
     let tool = CommitGenTool(options: options)

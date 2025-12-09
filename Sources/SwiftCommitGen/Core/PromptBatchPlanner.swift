@@ -22,6 +22,7 @@ struct PromptBatchPlanner {
   var tokenBudget: Int
   var headroomRatio: Double
   var minimumBatchSize: Int
+  private let importanceScorer = FileImportanceScorer()
 
   init(tokenBudget: Int = 4_096, headroomRatio: Double = 0.15, minimumBatchSize: Int = 1) {
     self.tokenBudget = max(1, tokenBudget)
@@ -30,11 +31,29 @@ struct PromptBatchPlanner {
   }
 
   /// Computes prompt batches sized to stay within the configured token budget.
-  func planBatches(for summary: ChangeSummary) -> [PromptBatch] {
+  /// - Parameters:
+  ///   - summary: The change summary containing files to batch.
+  ///   - groups: Optional pre-computed semantic groups. If provided, files within
+  ///             each group will be kept adjacent during batching.
+  func planBatches(
+    for summary: ChangeSummary,
+    groups: [[ChangeSummary.FileSummary]]? = nil
+  ) -> [PromptBatch] {
     guard !summary.files.isEmpty else { return [] }
 
+    // Compute importance scores for all files
+    let importanceScores = importanceScorer.scoresByPath(summary.files)
+
+    // Use grouped order if provided, otherwise use original file order
+    let orderedFiles: [ChangeSummary.FileSummary]
+    if let groups = groups {
+      orderedFiles = groups.flatMap { $0 }
+    } else {
+      orderedFiles = summary.files
+    }
+
     let targetBudget = max(1, Int(Double(tokenBudget) * (1.0 - headroomRatio)))
-    let contributions = summary.files.map { file -> FileContribution in
+    let contributions = orderedFiles.map { file -> FileContribution in
       let compactFile = file.withSnippetMode(.compact)
       let compactLines = compactFile.promptLines()
       let compactCharCount = compactLines.reduce(0) { partial, line in
@@ -57,13 +76,24 @@ struct PromptBatchPlanner {
         fullTokenEstimate: fullTokens,
         compactLineCount: compactLines.count,
         fullLineCount: fullLines.count,
-        canUseFull: canUseFull
+        canUseFull: canUseFull,
+        importanceScore: importanceScores[file.path] ?? 0
       )
-    }.sorted { lhs, rhs in
-      if lhs.compactTokenEstimate == rhs.compactTokenEstimate {
-        return lhs.compactFile.path < rhs.compactFile.path
+    }
+    // Note: When groups are provided, we preserve their order to keep semantically
+    // related files together. Without groups, we sort by token size for packing efficiency.
+    let sortedContributions: [FileContribution]
+    if groups != nil {
+      // Preserve group order - files already in semantic order
+      sortedContributions = contributions
+    } else {
+      // Sort by token size (descending) for efficient packing
+      sortedContributions = contributions.sorted { lhs, rhs in
+        if lhs.compactTokenEstimate == rhs.compactTokenEstimate {
+          return lhs.compactFile.path < rhs.compactFile.path
+        }
+        return lhs.compactTokenEstimate > rhs.compactTokenEstimate
       }
-      return lhs.compactTokenEstimate > rhs.compactTokenEstimate
     }
 
     var batches: [PromptBatch] = []
@@ -81,7 +111,7 @@ struct PromptBatchPlanner {
       currentTokenTotal = 0
     }
 
-    for contribution in contributions {
+    for contribution in sortedContributions {
       let nextTokenTotal = currentTokenTotal + contribution.compactTokenEstimate
 
       if !currentContributions.isEmpty && nextTokenTotal > targetBudget {
@@ -113,6 +143,7 @@ struct PromptBatchPlanner {
     var compactLineCount: Int
     var fullLineCount: Int
     var canUseFull: Bool
+    var importanceScore: Int
   }
 
   private func finalizeBatch(
@@ -131,19 +162,26 @@ struct PromptBatchPlanner {
     var totalTokens = totalTokens(for: contributions, useFull: useFull)
     var totalLines = totalLines(for: contributions, useFull: useFull)
 
-    var candidates: [(index: Int, delta: Int)] = []
+    // Build candidates with importance scores for prioritized allocation
+    var candidates: [(index: Int, delta: Int, importance: Int)] = []
     for (index, contribution) in contributions.enumerated() where contribution.canUseFull {
       let delta = contribution.fullTokenEstimate - contribution.compactTokenEstimate
       if delta > 0 {
-        candidates.append((index, delta))
+        candidates.append((index, delta, contribution.importanceScore))
       }
     }
 
+    // Sort by importance score (descending), then by token delta (ascending) for ties.
+    // This ensures more important files get full snippets first, and among equally
+    // important files, we prefer those that cost fewer tokens.
     candidates.sort { lhs, rhs in
-      if lhs.delta == rhs.delta {
-        return lhs.index < rhs.index
+      if lhs.importance != rhs.importance {
+        return lhs.importance > rhs.importance  // Higher importance first
       }
-      return lhs.delta < rhs.delta
+      if lhs.delta != rhs.delta {
+        return lhs.delta < rhs.delta  // Lower token cost first
+      }
+      return lhs.index < rhs.index  // Stable sort by index
     }
 
     for candidate in candidates where !useFull[candidate.index] {

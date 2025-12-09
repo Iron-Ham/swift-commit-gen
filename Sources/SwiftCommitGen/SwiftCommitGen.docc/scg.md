@@ -23,7 +23,7 @@ scg [--version] [--help]
 Inspect the current Git repository and draft a commit message.
 
 ```
-scg generate [--format=<format>] [--commit] [--no-commit] [--stage] [--no-stage] [--verbose] [--no-verbose] [--quiet] [--no-quiet] [--single-file] [--version] [--help]
+scg generate [--format=<format>] [--commit] [--no-commit] [--stage] [--no-stage] [--verbose] [--no-verbose] [--quiet] [--no-quiet] [--single-file] [--function-context] [--no-function-context] [--detect-renames] [--no-detect-renames] [--context-lines=<context-lines>] [--version] [--help]
 ```
 
 **--format=\<format\>:**
@@ -74,6 +74,31 @@ scg generate [--format=<format>] [--commit] [--no-commit] [--stage] [--no-stage]
 **--single-file:**
 
 *Process each file independently before combining the drafts into a single commit message.*
+
+
+**--function-context:**
+
+*Include entire functions containing changes in the diff (default: enabled).*
+
+
+**--no-function-context:**
+
+*Disable function context in diffs.*
+
+
+**--detect-renames:**
+
+*Detect renamed and copied files in diffs (default: enabled).*
+
+
+**--no-detect-renames:**
+
+*Disable rename/copy detection in diffs.*
+
+
+**--context-lines=\<context-lines\>:**
+
+*Number of context lines around changes (default: 3).*
 
 
 **--version:**
