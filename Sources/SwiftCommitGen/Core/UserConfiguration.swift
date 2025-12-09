@@ -6,6 +6,11 @@ struct UserConfiguration: Codable {
   var defaultVerbose: Bool?
   var defaultQuiet: Bool?
   var defaultGenerationMode: CommitGenOptions.GenerationMode?
+
+  // Diff options
+  var defaultFunctionContext: Bool?
+  var defaultDetectRenames: Bool?
+  var defaultContextLines: Int?
 }
 
 /// File-backed storage for loading and saving `UserConfiguration` values.

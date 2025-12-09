@@ -71,6 +71,34 @@ struct ConfigCommand: ParsableCommand {
   @Flag(name: .customLong("clear-mode"), help: "Remove the stored generation mode preference.")
   var clearMode: Bool = false
 
+  // Diff options
+  @Option(name: .customLong("function-context"), help: "Include entire functions in diffs (true/false).")
+  var functionContext: Bool?
+
+  @Flag(
+    name: .customLong("clear-function-context"),
+    help: "Remove the stored function-context preference."
+  )
+  var clearFunctionContext: Bool = false
+
+  @Option(name: .customLong("detect-renames"), help: "Detect renamed/copied files in diffs (true/false).")
+  var detectRenames: Bool?
+
+  @Flag(
+    name: .customLong("clear-detect-renames"),
+    help: "Remove the stored detect-renames preference."
+  )
+  var clearDetectRenames: Bool = false
+
+  @Option(name: .customLong("context-lines"), help: "Number of context lines around changes (e.g., 3).")
+  var contextLines: Int?
+
+  @Flag(
+    name: .customLong("clear-context-lines"),
+    help: "Remove the stored context-lines preference."
+  )
+  var clearContextLines: Bool = false
+
   /// Runs the `scg config` subcommand either interactively or via direct flag updates.
   func run() throws {
     try validateOptions()
@@ -124,6 +152,15 @@ struct ConfigCommand: ParsableCommand {
     if mode != nil && clearMode {
       throw ValidationError("Cannot use --mode together with --clear-mode.")
     }
+    if functionContext != nil && clearFunctionContext {
+      throw ValidationError("Cannot use --function-context together with --clear-function-context.")
+    }
+    if detectRenames != nil && clearDetectRenames {
+      throw ValidationError("Cannot use --detect-renames together with --clear-detect-renames.")
+    }
+    if contextLines != nil && clearContextLines {
+      throw ValidationError("Cannot use --context-lines together with --clear-context-lines.")
+    }
   }
 
   /// Returns true when the command should launch the interactive editor.
@@ -137,6 +174,12 @@ struct ConfigCommand: ParsableCommand {
       && !clearQuiet
       && mode == nil
       && !clearMode
+      && functionContext == nil
+      && !clearFunctionContext
+      && detectRenames == nil
+      && !clearDetectRenames
+      && contextLines == nil
+      && !clearContextLines
   }
 
   /// Applies configuration updates coming from explicit CLI flags.
@@ -211,6 +254,46 @@ struct ConfigCommand: ParsableCommand {
       }
     }
 
+    // Diff options
+    if clearFunctionContext {
+      if configuration.defaultFunctionContext != nil {
+        configuration.defaultFunctionContext = nil
+        changed = true
+      }
+    }
+    if let functionContextSetting = functionContext {
+      if configuration.defaultFunctionContext != functionContextSetting {
+        configuration.defaultFunctionContext = functionContextSetting
+        changed = true
+      }
+    }
+
+    if clearDetectRenames {
+      if configuration.defaultDetectRenames != nil {
+        configuration.defaultDetectRenames = nil
+        changed = true
+      }
+    }
+    if let detectRenamesSetting = detectRenames {
+      if configuration.defaultDetectRenames != detectRenamesSetting {
+        configuration.defaultDetectRenames = detectRenamesSetting
+        changed = true
+      }
+    }
+
+    if clearContextLines {
+      if configuration.defaultContextLines != nil {
+        configuration.defaultContextLines = nil
+        changed = true
+      }
+    }
+    if let contextLinesSetting = contextLines {
+      if configuration.defaultContextLines != contextLinesSetting {
+        configuration.defaultContextLines = contextLinesSetting
+        changed = true
+      }
+    }
+
     return changed
   }
 
@@ -278,6 +361,62 @@ struct ConfigCommand: ParsableCommand {
       ],
       theme: theme
     )
+
+    // Diff options
+    let functionContextCurrent = configuration.defaultFunctionContext ?? true
+    let functionContextNote =
+      configuration.defaultFunctionContext == nil ? "(default)" : nil
+    printPreference(
+      title: "Function context in diffs",
+      choices: [
+        DisplayChoice(
+          name: "enable",
+          isCurrent: functionContextCurrent,
+          isRecommended: true,
+          note: functionContextCurrent ? functionContextNote : nil
+        ),
+        DisplayChoice(
+          name: "disable",
+          isCurrent: !functionContextCurrent,
+          note: !functionContextCurrent ? functionContextNote : nil
+        ),
+      ],
+      theme: theme
+    )
+
+    let detectRenamesCurrent = configuration.defaultDetectRenames ?? true
+    let detectRenamesNote =
+      configuration.defaultDetectRenames == nil ? "(default)" : nil
+    printPreference(
+      title: "Detect renames/copies",
+      choices: [
+        DisplayChoice(
+          name: "enable",
+          isCurrent: detectRenamesCurrent,
+          isRecommended: true,
+          note: detectRenamesCurrent ? detectRenamesNote : nil
+        ),
+        DisplayChoice(
+          name: "disable",
+          isCurrent: !detectRenamesCurrent,
+          note: !detectRenamesCurrent ? detectRenamesNote : nil
+        ),
+      ],
+      theme: theme
+    )
+
+    let contextLinesCurrent = configuration.defaultContextLines ?? 3
+    let contextLinesNote =
+      configuration.defaultContextLines == nil ? "(default)" : nil
+    print(theme.applying(theme.emphasis, to: "Context lines:"))
+    let contextLinesDisplay = "\(contextLinesCurrent)"
+    var contextLinesLine = "  > \(contextLinesDisplay)"
+    if let note = contextLinesNote {
+      contextLinesLine += " " + theme.applying(theme.muted, to: note)
+    }
+    contextLinesLine += " " + theme.applying(theme.infoLabel, to: "[current]")
+    print(contextLinesLine)
+    print("")
   }
 }
 
@@ -455,11 +594,48 @@ struct ConfigInteractiveEditor {
       }
     }
 
+    if let functionContextChoice = promptForFunctionContext(
+      current: configuration.defaultFunctionContext
+    ) {
+      switch functionContextChoice {
+      case .enabled:
+        updated.defaultFunctionContext = true
+      case .disabled:
+        updated.defaultFunctionContext = false
+      case .clear:
+        updated.defaultFunctionContext = nil
+      }
+    }
+
+    if let detectRenamesChoice = promptForDetectRenames(current: configuration.defaultDetectRenames)
+    {
+      switch detectRenamesChoice {
+      case .enabled:
+        updated.defaultDetectRenames = true
+      case .disabled:
+        updated.defaultDetectRenames = false
+      case .clear:
+        updated.defaultDetectRenames = nil
+      }
+    }
+
+    if let contextLinesChoice = promptForContextLines(current: configuration.defaultContextLines) {
+      switch contextLinesChoice {
+      case .value(let n):
+        updated.defaultContextLines = n
+      case .clear:
+        updated.defaultContextLines = nil
+      }
+    }
+
     let changed =
       updated.autoStageIfNoStaged != original.autoStageIfNoStaged
       || updated.defaultVerbose != original.defaultVerbose
       || updated.defaultQuiet != original.defaultQuiet
       || updated.defaultGenerationMode != original.defaultGenerationMode
+      || updated.defaultFunctionContext != original.defaultFunctionContext
+      || updated.defaultDetectRenames != original.defaultDetectRenames
+      || updated.defaultContextLines != original.defaultContextLines
 
     return (updated, changed)
   }
@@ -700,5 +876,138 @@ struct ConfigInteractiveEditor {
     case automatic
     case perFile
     case clear
+  }
+
+  private enum EnableDisableChoice {
+    case enabled
+    case disabled
+    case clear
+  }
+
+  private enum ContextLinesChoice {
+    case value(Int)
+    case clear
+  }
+
+  /// Presents a numbered menu for toggling function context in diffs.
+  private func promptForFunctionContext(current: Bool?) -> EnableDisableChoice? {
+    let currentEnabled = current ?? true
+    let currentDescription = currentEnabled ? "enabled" : "disabled"
+
+    let choices: [Choice<EnableDisableChoice>] = [
+      Choice(
+        label: "1",
+        tokens: ["1", "yes", "y", "enable"],
+        description: "enable",
+        value: .enabled,
+        isRecommended: true
+      ),
+      Choice(
+        label: "2",
+        tokens: ["2", "no", "n", "disable"],
+        description: "disable",
+        value: .disabled
+      ),
+      Choice(
+        label: "",
+        tokens: ["clear", "reset"],
+        description: "",
+        value: .clear,
+        isVisible: false
+      ),
+    ]
+
+    return promptChoice(
+      title: "Include function context in diffs",
+      currentDescription: currentDescription,
+      choices: choices,
+      keepMessage: "Press Enter to keep current setting.",
+      isCurrent: { choiceValue in
+        switch (choiceValue, currentEnabled) {
+        case (.enabled, true), (.disabled, false):
+          return true
+        default:
+          return false
+        }
+      },
+      additionalInstructions: ["Type 'clear' to remove the stored preference (defaults to enabled)."]
+    )
+  }
+
+  /// Presents a numbered menu for toggling rename/copy detection in diffs.
+  private func promptForDetectRenames(current: Bool?) -> EnableDisableChoice? {
+    let currentEnabled = current ?? true
+    let currentDescription = currentEnabled ? "enabled" : "disabled"
+
+    let choices: [Choice<EnableDisableChoice>] = [
+      Choice(
+        label: "1",
+        tokens: ["1", "yes", "y", "enable"],
+        description: "enable",
+        value: .enabled,
+        isRecommended: true
+      ),
+      Choice(
+        label: "2",
+        tokens: ["2", "no", "n", "disable"],
+        description: "disable",
+        value: .disabled
+      ),
+      Choice(
+        label: "",
+        tokens: ["clear", "reset"],
+        description: "",
+        value: .clear,
+        isVisible: false
+      ),
+    ]
+
+    return promptChoice(
+      title: "Detect renamed/copied files in diffs",
+      currentDescription: currentDescription,
+      choices: choices,
+      keepMessage: "Press Enter to keep current setting.",
+      isCurrent: { choiceValue in
+        switch (choiceValue, currentEnabled) {
+        case (.enabled, true), (.disabled, false):
+          return true
+        default:
+          return false
+        }
+      },
+      additionalInstructions: ["Type 'clear' to remove the stored preference (defaults to enabled)."]
+    )
+  }
+
+  /// Prompts for a numeric context lines value.
+  private func promptForContextLines(current: Int?) -> ContextLinesChoice? {
+    let currentValue = current ?? 3
+    let currentDescription = "\(currentValue)"
+
+    io.printLine("")
+    let titleLine =
+      theme.applying(theme.emphasis, to: "Context lines around changes (")
+      + theme.applying(theme.path, to: currentDescription)
+      + theme.applying(theme.emphasis, to: "):")
+    io.printLine(titleLine)
+    io.printLine(
+      "  " + theme.applying(theme.muted, to: "Enter a number (0-10), 'clear' to reset to default (3), or press Enter to keep current.")
+    )
+
+    while true {
+      guard let response = io.prompt("Enter value: ") else { return nil }
+      let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty { return nil }
+      let normalized = trimmed.lowercased()
+      if normalized == "clear" || normalized == "reset" {
+        return .clear
+      }
+      if let value = Int(trimmed), value >= 0, value <= 10 {
+        return .value(value)
+      }
+      io.printLine(
+        theme.applying(theme.warningMessage, to: "Invalid input. Enter a number 0-10 or 'clear'.")
+      )
+    }
   }
 }

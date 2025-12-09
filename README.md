@@ -204,6 +204,14 @@ Available options:
 | `--clear-verbose` | Remove the stored verbose preference. |
 | `--quiet <true\|false>` | Set the default quiet logging preference. |
 | `--clear-quiet` | Remove the stored quiet preference. |
+| `--mode <automatic\|per-file>` | Set the default generation mode. |
+| `--clear-mode` | Remove the stored generation mode preference. |
+| `--function-context <true\|false>` | Set whether to include entire functions in diffs. |
+| `--clear-function-context` | Remove the stored function-context preference. |
+| `--detect-renames <true\|false>` | Set whether to detect renamed/copied files in diffs. |
+| `--clear-detect-renames` | Remove the stored detect-renames preference. |
+| `--context-lines <n>` | Set the default number of context lines around changes. |
+| `--clear-context-lines` | Remove the stored context-lines preference. |
 
 When no options are provided, the command detects whether the terminal is interactive and presents guided prompts with recommended defaults highlighted. Stored settings live in `~/Library/Application Support/scg/config.json`.
 

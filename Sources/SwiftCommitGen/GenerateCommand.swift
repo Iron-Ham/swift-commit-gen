@@ -152,14 +152,14 @@ struct GenerateCommand: AsyncParsableCommand {
     let configuredAutoStage = userConfig.autoStageIfNoStaged ?? false
     let autoStageIfNoStaged = stagePreference ?? configuredAutoStage
 
-    // Resolve diff options (defaults are true for both features)
+    // Resolve diff options (CLI flags override config, config overrides defaults)
     let useFunctionContext: Bool
     if functionContext {
       useFunctionContext = true
     } else if noFunctionContext {
       useFunctionContext = false
     } else {
-      useFunctionContext = true  // default enabled
+      useFunctionContext = userConfig.defaultFunctionContext ?? true
     }
 
     let useDetectRenames: Bool
@@ -168,13 +168,15 @@ struct GenerateCommand: AsyncParsableCommand {
     } else if noDetectRenames {
       useDetectRenames = false
     } else {
-      useDetectRenames = true  // default enabled
+      useDetectRenames = userConfig.defaultDetectRenames ?? true
     }
+
+    let resolvedContextLines = contextLines ?? userConfig.defaultContextLines
 
     let diffOptions = DiffOptions(
       useFunctionContext: useFunctionContext,
       detectRenamesCopies: useDetectRenames,
-      contextLines: contextLines
+      contextLines: resolvedContextLines
     )
 
     let options = CommitGenOptions(
