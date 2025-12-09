@@ -118,7 +118,10 @@ struct CommitGenTool {
     }
 
     let stagedStatus = GitStatus(staged: stagedChanges, unstaged: [], untracked: [])
-    let summary = try await summarizer.summarize(status: stagedStatus)
+    let summary = try await summarizer.summarize(
+      status: stagedStatus,
+      diffOptions: options.diffOptions
+    )
     logger.notice(
       "Summary: \(summary.fileCount) file(s), +\(summary.totalAdditions) / -\(summary.totalDeletions)"
     )
@@ -149,8 +152,12 @@ struct CommitGenTool {
         fullSummary: summary
       )
     case .automatic:
+      // Group semantically related files together (source + tests, same directory)
+      let grouper = SemanticFileGrouper()
+      let fileGroups = grouper.groupFiles(summary.files)
+
       let planner = PromptBatchPlanner()
-      let batches = planner.planBatches(for: summary)
+      let batches = planner.planBatches(for: summary, groups: fileGroups)
       let useBatching = shouldUseBatching(for: batches)
 
       if useBatching {
@@ -581,6 +588,44 @@ extension CommitGenTool {
       "Large change set spans \(fullSummary.fileCount) file(s); splitting into \(batches.count) prompt batch(es)."
     )
 
+    // Two-pass analysis: For large changesets, first get a high-level overview
+    // to provide context to each batch. This helps maintain coherence across batches.
+    let useTwoPass = fullSummary.fileCount > 15 || batches.count > 3
+    var overviewContext: String?
+
+    if useTwoPass {
+      logger.info("Using two-pass analysis for large changeset...")
+
+      let overviewBuilder = OverviewPromptBuilder()
+      let overviewPrompt = overviewBuilder.makePrompt(summary: fullSummary, metadata: metadata)
+      logPromptDiagnostics(overviewPrompt.diagnostics)
+
+      do {
+        let overviewResult = try await llmClient.generateOverview(from: overviewPrompt)
+        logPromptDiagnostics(overviewResult.diagnostics)
+
+        // Build minimal context from overview - only category and key files.
+        // Explicitly avoid passing the summary to batches, as the on-device LLM
+        // tends to copy it verbatim instead of analyzing the actual diffs.
+        var contextParts: [String] = []
+        let category = overviewResult.overview.category
+        if !category.isEmpty {
+          contextParts.append("Overall change type: \(category)")
+        }
+        if !overviewResult.overview.keyFiles.isEmpty {
+          contextParts.append(
+            "Key files in full changeset: \(overviewResult.overview.keyFiles.prefix(5).joined(separator: ", "))")
+        }
+        overviewContext = contextParts.isEmpty ? nil : contextParts.joined(separator: ". ")
+
+        logger.debug("Overview summary: \(overviewResult.overview.summary)")
+        logger.debug("Overview category: \(overviewResult.overview.category)")
+      } catch {
+        // If overview generation fails, continue without it
+        logger.warning("Overview generation failed, proceeding without high-level context: \(error)")
+      }
+    }
+
     var partialDrafts: [BatchPartialDraft] = []
 
     for (index, batch) in batches.enumerated() {
@@ -593,9 +638,16 @@ extension CommitGenTool {
       var batchPackage = promptBuilder.makePrompt(summary: batchSummary, metadata: metadata)
 
       let fileList = batch.files.prefix(10).map { "- \($0.path)" }.joined(separator: "\n")
-      var contextLines: [String] = [
-        "Batch \(batchNumber) of \(batches.count). Focus exclusively on these files; other batches are handled separately."
-      ]
+      var contextLines: [String] = []
+
+      contextLines.append(
+        "Batch \(batchNumber) of \(batches.count). Analyze the diff content above and describe the specific code changes."
+      )
+
+      // Include minimal overview context (category and key files only)
+      if let overview = overviewContext {
+        contextLines.append(overview)
+      }
       if !fileList.isEmpty {
         contextLines.append("Files in this batch:")
         contextLines.append(fileList)

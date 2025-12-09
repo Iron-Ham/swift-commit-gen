@@ -4,6 +4,13 @@ import FoundationModels
 /// Abstraction over the on-device language model that generates commit drafts.
 protocol LLMClient {
   func generateCommitDraft(from prompt: PromptPackage) async throws -> LLMGenerationResult
+  func generateOverview(from prompt: PromptPackage) async throws -> OverviewGenerationResult
+}
+
+/// Wraps a generated overview alongside diagnostics gathered during inference.
+struct OverviewGenerationResult: Sendable {
+  var overview: ChangesetOverview
+  var diagnostics: PromptDiagnostics
 }
 
 @Generable(description: "A commit for changes made in a git repository.")
@@ -15,7 +22,10 @@ struct CommitDraft: Hashable, Codable, Sendable {
   )
   var subject: String
 
-  @Guide(description: "A detailed description of the the purposes of the changes. It should describe WHY the changes were made.")
+  @Guide(
+    description:
+      "A detailed description of the the purposes of the changes. It should describe WHY the changes were made."
+  )
   var body: String?
 
   init(subject: String = "", body: String? = nil) {
@@ -146,6 +156,50 @@ struct FoundationModelsClient: LLMClient {
     )
 
     return LLMGenerationResult(draft: response.content, diagnostics: diagnostics)
+  }
+
+  func generateOverview(from prompt: PromptPackage) async throws -> OverviewGenerationResult {
+    let model = modelProvider()
+
+    guard case .available = model.availability else {
+      let reason = availabilityDescription(model.availability)
+      throw CommitGenError.modelUnavailable(reason: reason)
+    }
+
+    let session = LanguageModelSession(
+      model: model,
+      instructions: prompt.systemPrompt
+    )
+
+    var diagnostics = prompt.diagnostics
+    let response = try await session.respond(
+      generating: ChangesetOverview.self,
+      options: generationOptions
+    ) {
+      prompt.userPrompt
+    }
+
+    let usage = analyzeTranscriptEntries(response.transcriptEntries)
+    let promptTokens = usage.promptTokens
+    let outputTokens = usage.outputTokens
+    let totalTokens: Int?
+    if let promptTokens, let outputTokens {
+      totalTokens = promptTokens + outputTokens
+    } else if let promptTokens {
+      totalTokens = promptTokens
+    } else if let outputTokens {
+      totalTokens = outputTokens
+    } else {
+      totalTokens = nil
+    }
+
+    diagnostics.recordActualTokenUsage(
+      promptTokens: promptTokens,
+      outputTokens: outputTokens,
+      totalTokens: totalTokens
+    )
+
+    return OverviewGenerationResult(overview: response.content, diagnostics: diagnostics)
   }
 
   private func availabilityDescription(_ availability: SystemLanguageModel.Availability) -> String {

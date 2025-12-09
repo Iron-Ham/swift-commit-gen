@@ -123,6 +123,11 @@ scg generate [OPTIONS]
 | `--quiet` | `-q` | Suppress routine info lines | Off | Hides `[INFO]` but keeps `[NOTICE]`, warnings, errors. Ignored if `--verbose` is present. |
 | `--no-quiet` |  | Ensure quiet mode is disabled, even if configured | - | Helpful when scripts need full output. |
 | `--single-file` |  | Analyze each file independently and then combine per-file drafts | Off | Sends a larger diff slice per file, useful when you need high-fidelity summaries. |
+| `--function-context` |  | Include entire functions containing changes in the diff | On | Provides better semantic context for the AI model. |
+| `--no-function-context` |  | Disable function context in diffs | - | May reduce diff size for very large changesets. |
+| `--detect-renames` |  | Detect renamed and copied files in diffs | On | Shows moves as renames rather than delete + add. |
+| `--no-detect-renames` |  | Disable rename/copy detection | - | Use raw add/delete representation. |
+| `--context-lines <n>` |  | Number of context lines around changes | `3` | Higher values give more surrounding code context. |
 
 ### Verbosity Levels
 
@@ -172,6 +177,12 @@ Request high-fidelity per-file drafts before they are combined:
 
 ```sh
 scg --single-file
+```
+
+Generate with more context lines and disabled function context (for very large diffs):
+
+```sh
+scg --context-lines 5 --no-function-context
 ```
 
 Configuration Defaults

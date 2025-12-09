@@ -34,7 +34,7 @@ struct DiffSummarizerTests {
     )
 
     let summarizer = DefaultDiffSummarizer(gitClient: client, maxLinesPerFile: 10)
-    let summary = try await summarizer.summarize(status: status)
+    let summary = try await summarizer.summarize(status: status, diffOptions: .default)
 
     #expect(summary.fileCount == 1)
     #expect(summary.totalAdditions == 1)
@@ -95,12 +95,135 @@ struct DiffSummarizerTests {
     )
 
     let summarizer = DefaultDiffSummarizer(gitClient: client, maxLinesPerFile: 10)
-    let summary = try await summarizer.summarize(status: status)
+    let summary = try await summarizer.summarize(status: status, diffOptions: .default)
 
     #expect(summary.fileCount == 1)
     #expect(summary.totalAdditions == 1)
     #expect(summary.totalDeletions == 1)
     #expect(summary.files.allSatisfy { $0.location == .staged })
+  }
+
+  @Test("Smart snippet selection prioritizes changes over context")
+  func smartSnippetPrioritizesChanges() async throws {
+    let change = GitFileChange(
+      path: "Sources/App/Large.swift",
+      oldPath: nil,
+      kind: .modified,
+      location: .staged
+    )
+
+    let status = GitStatus(staged: [change], unstaged: [], untracked: [])
+
+    // Create a diff with lots of context and changes scattered throughout
+    let diff = """
+      diff --git a/Sources/App/Large.swift b/Sources/App/Large.swift
+      --- a/Sources/App/Large.swift
+      +++ b/Sources/App/Large.swift
+      @@ -10,20 +10,25 @@ func calculateTotal() {
+       let a = 1
+       let b = 2
+       let c = 3
+       let d = 4
+       let e = 5
+      -let oldValue = 10
+      +let newValue = 20
+       let f = 6
+       let g = 7
+       let h = 8
+       let i = 9
+       let j = 10
+      @@ -50,10 +55,15 @@ func anotherFunction() {
+       let x = 100
+       let y = 200
+      +let added = 300
+       let z = 400
+      """
+
+    let client = MockGitClient(
+      root: URL(fileURLWithPath: "/tmp/demo"),
+      status: status,
+      stagedDiff: diff,
+      unstagedDiff: ""
+    )
+
+    // Use a small maxLines to force smart selection
+    let summarizer = DefaultDiffSummarizer(gitClient: client, maxLinesPerFile: 8)
+    let summary = try await summarizer.summarize(status: status, diffOptions: .default)
+
+    let fileSummary = summary.files.first
+    #expect(fileSummary != nil)
+
+    let snippet = fileSummary!.snippet
+
+    // Should include hunk headers
+    #expect(snippet.contains { $0.contains("@@") })
+
+    // Should include actual changes
+    #expect(
+      snippet.contains {
+        $0.contains("-let oldValue") || $0.contains("+let newValue") || $0.contains("+let added")
+      }
+    )
+
+    // Should NOT be just the first N lines (which would be mostly context)
+    // The first few lines after the hunk header are context, not changes
+    #expect(!snippet.allSatisfy { !$0.hasPrefix("+") && !$0.hasPrefix("-") || $0.hasPrefix("@@") })
+  }
+
+  @Test("Smart snippet includes ellipsis for skipped sections")
+  func smartSnippetIncludesEllipsis() async throws {
+    let change = GitFileChange(
+      path: "Sources/App/Scattered.swift",
+      oldPath: nil,
+      kind: .modified,
+      location: .staged
+    )
+
+    let status = GitStatus(staged: [change], unstaged: [], untracked: [])
+
+    // Diff with changes far apart
+    let diff = """
+      diff --git a/Sources/App/Scattered.swift b/Sources/App/Scattered.swift
+      --- a/Sources/App/Scattered.swift
+      +++ b/Sources/App/Scattered.swift
+      @@ -1,5 +1,5 @@
+      -first change
+      +FIRST CHANGE
+       context1
+       context2
+       context3
+       context4
+       context5
+       context6
+       context7
+       context8
+       context9
+       context10
+      -second change
+      +SECOND CHANGE
+      """
+
+    let client = MockGitClient(
+      root: URL(fileURLWithPath: "/tmp/demo"),
+      status: status,
+      stagedDiff: diff,
+      unstagedDiff: ""
+    )
+
+    let summarizer = DefaultDiffSummarizer(gitClient: client, maxLinesPerFile: 10)
+    let summary = try await summarizer.summarize(status: status, diffOptions: .default)
+
+    let fileSummary = summary.files.first
+    #expect(fileSummary != nil)
+
+    let snippet = fileSummary!.snippet
+
+    // Should include both changes
+    #expect(snippet.contains { $0.contains("FIRST") })
+    #expect(snippet.contains { $0.contains("SECOND") })
+
+    // Should include ellipsis marker for skipped context
+    #expect(snippet.contains { $0.contains("...") })
   }
 }
 
@@ -118,11 +241,11 @@ private struct MockGitClient: GitClient {
     status
   }
 
-  func diffStaged() async throws -> String {
+  func diffStaged(options: DiffOptions) async throws -> String {
     stagedDiff
   }
 
-  func diffUnstaged() async throws -> String {
+  func diffUnstaged(options: DiffOptions) async throws -> String {
     unstagedDiff
   }
 
