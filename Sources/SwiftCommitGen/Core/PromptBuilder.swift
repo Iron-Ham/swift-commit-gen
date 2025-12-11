@@ -183,8 +183,8 @@ struct DefaultPromptBuilder: PromptBuilder {
 
   init(
     maxFiles: Int = 12,
-    maxSnippetLines: Int = 25,
-    maxPromptLineEstimate: Int = 400,
+    maxSnippetLines: Int = 50,
+    maxPromptLineEstimate: Int = 600,
     minFiles: Int = 3,
     minSnippetLines: Int = 6,
     snippetReductionStep: Int = 4,
@@ -295,19 +295,12 @@ struct DefaultPromptBuilder: PromptBuilder {
   private func buildSystemPrompt(style: CommitGenOptions.PromptStyle) -> Instructions {
     Instructions {
       """
-      You're an AI assistant whose job is to concisely summarize code changes into short, useful commit messages, with a title and a description.
-      A changeset is given in the git diff output format, affecting one or multiple files.
+      Write a git commit message for the code changes shown.
 
-      The commit title should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history.
-      The commit description can be longer, and should provide more context about the changeset, including why the changeset is being made, and any other relevant information.
-      The commit description is optional, so you can omit it if the changeset is small enough that it can be described in the commit title or if you don't have enough context.
+      Subject: max 50 chars, imperative mood ("Add X" not "Added X"), describe WHAT changed.
+      Body: optional, explain WHY if helpful.
 
-      Be brief and concise.
-
-      Do NOT include a description of changes in "lock" files from dependency managers like npm, yarn, or pip (and others), unless those are the only changes in the commit.
-
-      When more explanation is helpful, provide a short body with full sentences.
-      Leave the body empty when the subject already captures the change or the context is unclear.
+      Read the diff carefully. Lines with + are additions, - are deletions.
       """
       ""
       style.styleGuidance

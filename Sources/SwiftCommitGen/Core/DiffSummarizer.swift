@@ -73,11 +73,11 @@ struct ChangeSummary: Hashable, Codable, PromptRepresentable {
     }
 
     private static let largeChangeThreshold = 400
-    private static let largeDiffLineThreshold = 200
 
     private var diffIsLarge: Bool {
+      // Only consider actual changes (additions + deletions), not context lines
+      // This prevents --function-context from falsely marking small changes as "large"
       additions + deletions >= Self.largeChangeThreshold
-        || diffLineCount >= Self.largeDiffLineThreshold
     }
 
     private var shouldRenderSnippet: Bool {
