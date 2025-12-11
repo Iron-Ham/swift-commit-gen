@@ -62,13 +62,10 @@ struct BatchCombinationPromptBuilder {
 
     let systemPrompt = Instructions {
       """
-      You are an AI assistant merging multiple partial commit drafts into a single, well-structured commit message. 
-      Preserve all important intent from the inputs, avoid redundancy, and keep the final subject concise (<= 50 characters). 
-      The title should succinctly describe the change in a specific and informative manner.
-      Provide an optional body only when useful for additional context. 
-      If a body is present, it should describe the _purpose_ of the change, not just _what_ was changed: focus on the reasoning behind the changes rather than a file-by-file summary.
+      Combine these partial commit drafts into one commit message.
 
-      Be clear and concise, but do not omit critical information.
+      Subject: max 50 chars, imperative mood, summarize the shared purpose.
+      Body: optional, explain WHY if helpful.
       """
       ""
       metadata.style.styleGuidance

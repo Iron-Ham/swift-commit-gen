@@ -13,18 +13,16 @@ struct OverviewGenerationResult: Sendable {
   var diagnostics: PromptDiagnostics
 }
 
-@Generable(description: "A commit for changes made in a git repository.")
+@Generable(description: "A git commit message with subject and optional body.")
 /// Model representation for the subject/body pair returned by the language model.
 struct CommitDraft: Hashable, Codable, Sendable {
   @Guide(
-    description:
-      "The title of a commit. It should be no longer than 50 characters and should summarize the contents of the changeset for other developers reading the commit history. It should describe WHAT was changed."
+    description: "Subject line (max 50 chars). Imperative mood: 'Add X' not 'Added X'. Describe WHAT changed."
   )
   var subject: String
 
   @Guide(
-    description:
-      "A detailed description of the the purposes of the changes. It should describe WHY the changes were made."
+    description: "Optional body explaining WHY the change was made. Omit if subject is clear enough."
   )
   var body: String?
 
@@ -103,8 +101,8 @@ struct FoundationModelsClient: LLMClient {
   init(
     generationOptions: GenerationOptions = GenerationOptions(
       sampling: nil,
-      temperature: 0.3,
-      maximumResponseTokens: 512
+      temperature: 0.4,
+      maximumResponseTokens: 256
     ),
     configuration: Configuration = Configuration(),
     modelProvider: @escaping () -> SystemLanguageModel = { SystemLanguageModel.default }

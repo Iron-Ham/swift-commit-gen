@@ -2,24 +2,17 @@ import Foundation
 import FoundationModels
 
 /// LLM output structure for the overview pass.
-@Generable(description: "A high-level overview of a large changeset.")
+@Generable(description: "High-level overview of a large changeset.")
 struct ChangesetOverview: Hashable, Codable, Sendable {
-  @Guide(
-    description:
-      "A concise summary (2-3 sentences) describing the overall purpose and scope of the changes."
-  )
+  @Guide(description: "2-3 sentence summary of the overall purpose of the changes.")
   var summary: String
 
   @Guide(
-    description:
-      "The primary category of this changeset: feature, bugfix, refactor, test, docs, or chore."
+    description: "Category: feature, bugfix, refactor, test, docs, or chore."
   )
   var category: String
 
-  @Guide(
-    description:
-      "List of the most important files that are central to understanding the changeset (up to 5 paths)."
-  )
+  @Guide(description: "1-5 most important file paths for understanding the change.")
   var keyFiles: [String]
 
   init(summary: String = "", category: String = "", keyFiles: [String] = []) {
