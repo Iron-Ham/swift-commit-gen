@@ -130,6 +130,7 @@ struct CommitGenTool {
       )
     }
 
+    logger.info("Analyzing staged changes…")
     let stagedStatus = GitStatus(staged: stagedChanges, unstaged: [], untracked: [])
     let summary = try await summarizer.summarize(
       status: stagedStatus,
