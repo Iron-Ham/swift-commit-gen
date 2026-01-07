@@ -254,7 +254,10 @@ struct SystemGitClient: GitClient {
     return result
   }
 
-  private func runGit(_ arguments: [String]) throws -> String {
+  /// Default timeout for git operations in seconds.
+  private static let gitCommandTimeout: TimeInterval = 60
+
+  private func runGit(_ arguments: [String], timeout: TimeInterval = gitCommandTimeout) throws -> String {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = ["git"] + arguments
@@ -268,28 +271,61 @@ struct SystemGitClient: GitClient {
     environment["LC_ALL"] = "C"
     process.environment = environment
 
+    // Ensure file handles are always closed to prevent descriptor leaks
+    defer {
+      try? stdoutPipe.fileHandleForReading.close()
+      try? stderrPipe.fileHandleForReading.close()
+    }
+
     do {
       try process.run()
     } catch {
       throw CommitGenError.gitCommandFailed(message: error.localizedDescription)
     }
 
-    // IMPORTANT: Read from pipes BEFORE waiting for exit to avoid deadlock.
-    // If the output exceeds the pipe buffer (~64KB), the process will block
-    // waiting to write more data, causing a deadlock if we wait for exit first.
-    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+    // Read from pipes with timeout using DispatchGroup.
+    // IMPORTANT: Read BEFORE waiting for exit to avoid deadlock when output
+    // exceeds the pipe buffer (~64KB).
+    let readGroup = DispatchGroup()
+    let stdoutBox = DataBox()
+    let stderrBox = DataBox()
+
+    readGroup.enter()
+    DispatchQueue.global(qos: .userInitiated).async {
+      stdoutBox.value = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+      readGroup.leave()
+    }
+
+    readGroup.enter()
+    DispatchQueue.global(qos: .userInitiated).async {
+      stderrBox.value = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+      readGroup.leave()
+    }
+
+    let waitResult = readGroup.wait(timeout: .now() + timeout)
+
+    if waitResult == .timedOut {
+      process.terminate()
+      let command = arguments.first ?? "unknown"
+      throw CommitGenError.gitCommandTimedOut(command: command, timeout: timeout)
+    }
 
     process.waitUntilExit()
 
     guard process.terminationStatus == 0 else {
-      let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+      let stderr = String(data: stderrBox.value ?? Data(), encoding: .utf8) ?? ""
       let message = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
       throw CommitGenError.gitCommandFailed(message: message)
     }
 
-    return String(data: stdoutData, encoding: .utf8) ?? ""
+    return String(data: stdoutBox.value ?? Data(), encoding: .utf8) ?? ""
   }
+}
+
+/// Thread-safe container for passing data across dispatch queues.
+/// Allows concurrent read/write without Swift concurrency warnings.
+private final class DataBox: @unchecked Sendable {
+  var value: Data?
 }
 
 struct GitStatusParser {
