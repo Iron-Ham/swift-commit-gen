@@ -80,23 +80,30 @@ struct LLMGenerationResult: Sendable {
 }
 
 /// Concrete LLM client backed by Apple's FoundationModels framework.
-struct FoundationModelsClient: LLMClient {
+struct FoundationModelsClient: LLMClient, Sendable {
   /// Controls retry behavior and timeouts for generation requests.
-  struct Configuration {
+  struct Configuration: Sendable {
     var maxAttempts: Int
     var requestTimeout: TimeInterval
     var retryDelay: TimeInterval
 
-    init(maxAttempts: Int = 3, requestTimeout: TimeInterval = 20, retryDelay: TimeInterval = 1) {
+    init(maxAttempts: Int = 3, requestTimeout: TimeInterval = 30, retryDelay: TimeInterval = 1) {
       self.maxAttempts = max(1, maxAttempts)
-      self.requestTimeout = max(0, requestTimeout)
+      self.requestTimeout = max(1, requestTimeout)
       self.retryDelay = max(0, retryDelay)
     }
   }
 
+  /// Holds extracted Sendable data from a LanguageModelSession response.
+  private struct ResponseData<Content: Sendable>: Sendable {
+    let content: Content
+    let promptTokens: Int?
+    let outputTokens: Int?
+  }
+
   private let generationOptions: GenerationOptions
   private let configuration: Configuration
-  private let modelProvider: () -> SystemLanguageModel
+  private let modelProvider: @Sendable () -> SystemLanguageModel
 
   init(
     generationOptions: GenerationOptions = GenerationOptions(
@@ -105,7 +112,7 @@ struct FoundationModelsClient: LLMClient {
       maximumResponseTokens: 256
     ),
     configuration: Configuration = Configuration(),
-    modelProvider: @escaping () -> SystemLanguageModel = { SystemLanguageModel.default }
+    modelProvider: @escaping @Sendable () -> SystemLanguageModel = { SystemLanguageModel.default }
   ) {
     self.generationOptions = generationOptions
     self.configuration = configuration
@@ -120,40 +127,69 @@ struct FoundationModelsClient: LLMClient {
       throw CommitGenError.modelUnavailable(reason: reason)
     }
 
-    let session = LanguageModelSession(
-      model: model,
-      instructions: prompt.systemPrompt
-    )
-
+    var lastError: Error?
     var diagnostics = prompt.diagnostics
-    let response = try await session.respond(
-      generating: CommitDraft.self,
-      options: generationOptions
-    ) {
-      prompt.userPrompt
+
+    // Capture values needed inside the Sendable closure
+    let options = generationOptions
+    let systemPrompt = prompt.systemPrompt
+    let userPrompt = prompt.userPrompt
+
+    for attempt in 1...configuration.maxAttempts {
+      // Exponential backoff: timeout doubles each retry (30s → 60s → 120s)
+      let attemptTimeout = configuration.requestTimeout * pow(2.0, Double(attempt - 1))
+
+      do {
+        let responseData = try await withTimeout(seconds: attemptTimeout) {
+          let session = LanguageModelSession(model: model, instructions: systemPrompt)
+          let response = try await session.respond(
+            generating: CommitDraft.self,
+            options: options
+          ) {
+            userPrompt
+          }
+
+          // Extract Sendable data before crossing task boundary
+          let usage = Self.analyzeTranscriptEntries(response.transcriptEntries)
+          return ResponseData(
+            content: response.content,
+            promptTokens: usage.promptTokens,
+            outputTokens: usage.outputTokens
+          )
+        }
+
+        let promptTokens = responseData.promptTokens
+        let outputTokens = responseData.outputTokens
+        let totalTokens: Int?
+        if let promptTokens, let outputTokens {
+          totalTokens = promptTokens + outputTokens
+        } else if let promptTokens {
+          totalTokens = promptTokens
+        } else if let outputTokens {
+          totalTokens = outputTokens
+        } else {
+          totalTokens = nil
+        }
+
+        diagnostics.recordActualTokenUsage(
+          promptTokens: promptTokens,
+          outputTokens: outputTokens,
+          totalTokens: totalTokens
+        )
+
+        return LLMGenerationResult(draft: responseData.content, diagnostics: diagnostics)
+      } catch is LLMTimeoutError {
+        lastError = CommitGenError.modelTimedOut(timeout: attemptTimeout)
+        if attempt < configuration.maxAttempts {
+          try await Task.sleep(for: .seconds(configuration.retryDelay))
+        }
+      } catch {
+        // Non-timeout errors fail immediately
+        throw error
+      }
     }
 
-    let usage = analyzeTranscriptEntries(response.transcriptEntries)
-    let promptTokens = usage.promptTokens
-    let outputTokens = usage.outputTokens
-    let totalTokens: Int?
-    if let promptTokens, let outputTokens {
-      totalTokens = promptTokens + outputTokens
-    } else if let promptTokens {
-      totalTokens = promptTokens
-    } else if let outputTokens {
-      totalTokens = outputTokens
-    } else {
-      totalTokens = nil
-    }
-
-    diagnostics.recordActualTokenUsage(
-      promptTokens: promptTokens,
-      outputTokens: outputTokens,
-      totalTokens: totalTokens
-    )
-
-    return LLMGenerationResult(draft: response.content, diagnostics: diagnostics)
+    throw lastError ?? CommitGenError.modelTimedOut(timeout: configuration.requestTimeout)
   }
 
   func generateOverview(from prompt: PromptPackage) async throws -> OverviewGenerationResult {
@@ -164,40 +200,69 @@ struct FoundationModelsClient: LLMClient {
       throw CommitGenError.modelUnavailable(reason: reason)
     }
 
-    let session = LanguageModelSession(
-      model: model,
-      instructions: prompt.systemPrompt
-    )
-
+    var lastError: Error?
     var diagnostics = prompt.diagnostics
-    let response = try await session.respond(
-      generating: ChangesetOverview.self,
-      options: generationOptions
-    ) {
-      prompt.userPrompt
+
+    // Capture values needed inside the Sendable closure
+    let options = generationOptions
+    let systemPrompt = prompt.systemPrompt
+    let userPrompt = prompt.userPrompt
+
+    for attempt in 1...configuration.maxAttempts {
+      // Exponential backoff: timeout doubles each retry (30s → 60s → 120s)
+      let attemptTimeout = configuration.requestTimeout * pow(2.0, Double(attempt - 1))
+
+      do {
+        let responseData = try await withTimeout(seconds: attemptTimeout) {
+          let session = LanguageModelSession(model: model, instructions: systemPrompt)
+          let response = try await session.respond(
+            generating: ChangesetOverview.self,
+            options: options
+          ) {
+            userPrompt
+          }
+
+          // Extract Sendable data before crossing task boundary
+          let usage = Self.analyzeTranscriptEntries(response.transcriptEntries)
+          return ResponseData(
+            content: response.content,
+            promptTokens: usage.promptTokens,
+            outputTokens: usage.outputTokens
+          )
+        }
+
+        let promptTokens = responseData.promptTokens
+        let outputTokens = responseData.outputTokens
+        let totalTokens: Int?
+        if let promptTokens, let outputTokens {
+          totalTokens = promptTokens + outputTokens
+        } else if let promptTokens {
+          totalTokens = promptTokens
+        } else if let outputTokens {
+          totalTokens = outputTokens
+        } else {
+          totalTokens = nil
+        }
+
+        diagnostics.recordActualTokenUsage(
+          promptTokens: promptTokens,
+          outputTokens: outputTokens,
+          totalTokens: totalTokens
+        )
+
+        return OverviewGenerationResult(overview: responseData.content, diagnostics: diagnostics)
+      } catch is LLMTimeoutError {
+        lastError = CommitGenError.modelTimedOut(timeout: attemptTimeout)
+        if attempt < configuration.maxAttempts {
+          try await Task.sleep(for: .seconds(configuration.retryDelay))
+        }
+      } catch {
+        // Non-timeout errors fail immediately
+        throw error
+      }
     }
 
-    let usage = analyzeTranscriptEntries(response.transcriptEntries)
-    let promptTokens = usage.promptTokens
-    let outputTokens = usage.outputTokens
-    let totalTokens: Int?
-    if let promptTokens, let outputTokens {
-      totalTokens = promptTokens + outputTokens
-    } else if let promptTokens {
-      totalTokens = promptTokens
-    } else if let outputTokens {
-      totalTokens = outputTokens
-    } else {
-      totalTokens = nil
-    }
-
-    diagnostics.recordActualTokenUsage(
-      promptTokens: promptTokens,
-      outputTokens: outputTokens,
-      totalTokens: totalTokens
-    )
-
-    return OverviewGenerationResult(overview: response.content, diagnostics: diagnostics)
+    throw lastError ?? CommitGenError.modelTimedOut(timeout: configuration.requestTimeout)
   }
 
   private func availabilityDescription(_ availability: SystemLanguageModel.Availability) -> String {
@@ -218,7 +283,7 @@ struct FoundationModelsClient: LLMClient {
     }
   }
 
-  private func analyzeTranscriptEntries(
+  private static func analyzeTranscriptEntries(
     _ entries: ArraySlice<FoundationModels.Transcript.Entry>
   ) -> (promptTokens: Int?, outputTokens: Int?) {
     var instructionSegments: [String] = []
@@ -260,13 +325,13 @@ struct FoundationModelsClient: LLMClient {
     return (promptTokenCount, responseTokenCount)
   }
 
-  private func estimatedTokenCount(for segments: [String]) -> Int {
+  private static func estimatedTokenCount(for segments: [String]) -> Int {
     guard !segments.isEmpty else { return 0 }
     let combined = segments.joined(separator: "\n")
     return PromptDiagnostics.tokenEstimate(forCharacterCount: combined.count)
   }
 
-  private func textSegments(from segments: [FoundationModels.Transcript.Segment]) -> [String] {
+  private static func textSegments(from segments: [FoundationModels.Transcript.Segment]) -> [String] {
     segments.compactMap { segment in
       switch segment {
       case .text(let text):
@@ -277,5 +342,38 @@ struct FoundationModelsClient: LLMClient {
         nil
       }
     }
+  }
+}
+
+// MARK: - Timeout Utilities
+
+/// Sentinel error thrown when an LLM operation exceeds its time limit.
+struct LLMTimeoutError: Error {}
+
+/// Races an async operation against a timeout, throwing `LLMTimeoutError` if the timeout fires first.
+///
+/// Uses a task group to run the operation and a sleep task concurrently. Whichever completes
+/// first determines the outcome—either returning the result or throwing the timeout error.
+func withTimeout<T: Sendable>(
+  seconds: TimeInterval,
+  operation: @escaping @Sendable () async throws -> T
+) async throws -> T {
+  try await withThrowingTaskGroup(of: T.self) { group in
+    group.addTask {
+      try await operation()
+    }
+    group.addTask {
+      try await Task.sleep(for: .seconds(seconds))
+      throw LLMTimeoutError()
+    }
+
+    // The first task to complete determines success or failure
+    guard let result = try await group.next() else {
+      throw LLMTimeoutError()
+    }
+
+    // Cancel the remaining task (either the operation or the sleep)
+    group.cancelAll()
+    return result
   }
 }

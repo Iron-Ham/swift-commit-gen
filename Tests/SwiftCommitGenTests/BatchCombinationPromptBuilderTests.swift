@@ -93,7 +93,7 @@ struct BatchCombinationPromptBuilderTests {
     #expect(package.diagnostics.estimatedLineCount >= 14)
 
     let instructions = String(describing: package.systemPrompt)
-    #expect(instructions.contains("You are an AI assistant"))
+    #expect(instructions.contains("Combine these partial commit drafts"))
     #expect(instructions.contains("Style: use the body for a few short sentences"))
   }
 
