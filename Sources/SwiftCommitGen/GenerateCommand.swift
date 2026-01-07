@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 
 /// Implements the `scg generate` subcommand that inspects the repository and
 /// produces an AI-assisted commit draft.
@@ -106,6 +107,20 @@ struct GenerateCommand: AsyncParsableCommand {
   )
   private var contextLines: Int?
 
+  /// Timeout in seconds for LLM requests.
+  @Option(
+    name: .long,
+    help: "Timeout in seconds for LLM requests (default: 30, doubles on each retry)."
+  )
+  private var timeout: Int?
+
+  /// Maximum retry attempts for LLM requests.
+  @Option(
+    name: .customLong("max-attempts"),
+    help: "Maximum retry attempts for LLM requests (default: 3)."
+  )
+  private var maxAttempts: Int?
+
   /// Resolves CLI flags, merges them with persisted defaults, and executes the
   /// commit generation tool end-to-end.
   func run() async throws {
@@ -179,6 +194,18 @@ struct GenerateCommand: AsyncParsableCommand {
       contextLines: resolvedContextLines
     )
 
+    // Resolve LLM timeout options (CLI flags override config)
+    let resolvedTimeout: TimeInterval?
+    if let timeout {
+      resolvedTimeout = TimeInterval(timeout)
+    } else if let configTimeout = userConfig.llmTimeout {
+      resolvedTimeout = TimeInterval(configTimeout)
+    } else {
+      resolvedTimeout = nil  // Use default from FoundationModelsClient
+    }
+
+    let resolvedMaxAttempts = maxAttempts ?? userConfig.llmMaxAttempts
+
     let options = CommitGenOptions(
       outputFormat: outputFormat,
       promptStyle: .detailed,
@@ -188,7 +215,9 @@ struct GenerateCommand: AsyncParsableCommand {
       isVerbose: resolvedVerbose,
       isQuiet: effectiveQuiet,
       generationMode: generationMode,
-      diffOptions: diffOptions
+      diffOptions: diffOptions,
+      llmTimeout: resolvedTimeout,
+      llmMaxAttempts: resolvedMaxAttempts
     )
 
     let tool = CommitGenTool(options: options)

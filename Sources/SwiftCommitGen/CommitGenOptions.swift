@@ -1,3 +1,4 @@
+import Foundation
 import FoundationModels
 
 /// Configuration for git diff command behavior.
@@ -57,4 +58,8 @@ struct CommitGenOptions {
   var generationMode: GenerationMode
   /// Configuration for git diff command behavior.
   var diffOptions: DiffOptions
+  /// Timeout in seconds for LLM requests (default: 30).
+  var llmTimeout: TimeInterval?
+  /// Maximum retry attempts for LLM requests (default: 3).
+  var llmMaxAttempts: Int?
 }
