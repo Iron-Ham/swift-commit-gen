@@ -11,6 +11,12 @@ struct UserConfiguration: Codable {
   var defaultFunctionContext: Bool?
   var defaultDetectRenames: Bool?
   var defaultContextLines: Int?
+
+  // LLM timeout options
+  /// Default timeout in seconds for LLM requests (default: 30).
+  var llmTimeout: Int?
+  /// Maximum retry attempts for LLM requests (default: 3).
+  var llmMaxAttempts: Int?
 }
 
 /// File-backed storage for loading and saving `UserConfiguration` values.

@@ -18,7 +18,7 @@ struct CommitGenTool {
     gitClient: GitClient = SystemGitClient(),
     summarizer: DiffSummarizer? = nil,
     promptBuilder: PromptBuilder? = nil,
-    llmClient: LLMClient = FoundationModelsClient(),
+    llmClient: LLMClient? = nil,
     renderer: Renderer = ConsoleRenderer(),
     logger: CommitGenLogger? = nil
   ) {
@@ -57,7 +57,20 @@ struct CommitGenTool {
     } else {
       self.promptBuilder = DefaultPromptBuilder()
     }
-    self.llmClient = llmClient
+
+    // Create LLM client with custom configuration if timeout options are set
+    if let llmClient {
+      self.llmClient = llmClient
+    } else {
+      var llmConfig = FoundationModelsClient.Configuration()
+      if let timeout = options.llmTimeout {
+        llmConfig.requestTimeout = timeout
+      }
+      if let maxAttempts = options.llmMaxAttempts {
+        llmConfig.maxAttempts = maxAttempts
+      }
+      self.llmClient = FoundationModelsClient(configuration: llmConfig)
+    }
     self.renderer = renderer
     self.logger = logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
     self.consoleTheme = self.logger.consoleTheme
