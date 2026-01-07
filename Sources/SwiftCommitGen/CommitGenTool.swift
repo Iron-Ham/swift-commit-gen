@@ -1,4 +1,5 @@
 import Foundation
+import Noora
 
 /// Coordinates the end-to-end flow for generating, reviewing, and optionally
 /// applying an AI-assisted commit message.
@@ -11,6 +12,7 @@ struct CommitGenTool {
   private let renderer: Renderer
   private let logger: CommitGenLogger
   private let consoleTheme: ConsoleTheme
+  private let noora: Noorable
 
   /// Creates a tool instance with configurable collaborators for easier testing.
   init(
@@ -20,7 +22,8 @@ struct CommitGenTool {
     promptBuilder: PromptBuilder? = nil,
     llmClient: LLMClient = FoundationModelsClient(),
     renderer: Renderer = ConsoleRenderer(),
-    logger: CommitGenLogger? = nil
+    logger: CommitGenLogger? = nil,
+    noora: Noorable? = nil
   ) {
     self.options = options
     self.gitClient = gitClient
@@ -61,6 +64,7 @@ struct CommitGenTool {
     self.renderer = renderer
     self.logger = logger ?? CommitGenLogger(isVerbose: options.isVerbose, isQuiet: options.isQuiet)
     self.consoleTheme = self.logger.consoleTheme
+    self.noora = noora ?? Noora()
   }
 
   /// Executes the commit generation pipeline from Git inspection to
@@ -212,7 +216,14 @@ struct CommitGenTool {
           additionalContext.map { outcome.promptPackage.appendingUserContext($0) }
           ?? outcome.promptPackage
         logPromptDiagnostics(package.diagnostics)
-        let regeneration = try await llmClient.generateCommitDraft(from: package)
+        let regeneration = try await noora.progressStep(
+          message: "Regenerating commit message…",
+          successMessage: "Commit message regenerated",
+          errorMessage: "Regeneration failed",
+          showSpinner: true
+        ) { _ in
+          try await llmClient.generateCommitDraft(from: package)
+        }
         logPromptDiagnostics(regeneration.diagnostics)
         return regeneration.draft
       }
@@ -220,13 +231,24 @@ struct CommitGenTool {
       draft = reviewedDraft
       try await handleAcceptedDraft(draft)
     } else {
-      logger.warning("Commit generation flow aborted; no changes were committed.")
+      noora.warning(.alert("Commit generation aborted", takeaway: "No changes were committed"))
     }
   }
 
   private func repositoryName(from url: URL) -> String {
     let candidate = url.lastPathComponent
     return candidate.isEmpty ? url.path : candidate
+  }
+
+  /// Actions available when reviewing a generated draft.
+  private enum ReviewAction: String, CaseIterable, CustomStringConvertible {
+    case accept = "Accept and commit"
+    case edit = "Edit in $EDITOR"
+    case regenerate = "Regenerate"
+    case regenerateWithContext = "Regenerate with context"
+    case abort = "Abort"
+
+    var description: String { rawValue }
   }
 
   /// Presents the interactive review loop and returns the accepted draft, if any.
@@ -237,53 +259,36 @@ struct CommitGenTool {
     var currentDraft = initialDraft
 
     reviewLoop: while true {
-      logger.notice(
-        "Options: [y] accept, [e] edit in $EDITOR, [r] regenerate, [c] regenerate with context, [n] abort"
+      let action: ReviewAction = noora.singleChoicePrompt(
+        title: "Review Draft",
+        question: "What would you like to do?",
+        description: "Use arrow keys to select, Enter to confirm"
       )
-      guard let response = promptUser("Apply commit draft? [y/e/r/c/n]: ") else {
-        continue
-      }
 
-      switch response {
-      case "y", "yes":
+      switch action {
+      case .accept:
         return currentDraft
-      case "e", "edit":
+      case .edit:
         if let updated = try editDraft(currentDraft) {
           currentDraft = updated
           renderer.render(currentDraft, format: .text, report: nil)
         }
-      case "r", "regen", "regenerate":
-        logger.info("Requesting a new commit draft from the on-device language model…")
+      case .regenerate:
         currentDraft = try await regenerate(nil)
         renderer.render(currentDraft, format: .text, report: nil)
-      case "c", "context":
+      case .regenerateWithContext:
         guard let additionalContext = promptForAdditionalContext() else {
           logger.warning("No additional context provided; keeping previous draft.")
           continue
         }
-        logger.info("Requesting a new commit draft with user context…")
         currentDraft = try await regenerate(additionalContext)
         renderer.render(currentDraft, format: .text, report: nil)
-      case "n", "no", "q", "quit":
+      case .abort:
         break reviewLoop
-      default:
-        logger.warning("Unrecognized option. Please respond with y, e, r, c, or n.")
       }
     }
 
     return nil
-  }
-
-  /// Prompts the user on stderr and collects a lowercased response from stdin.
-  private func promptUser(_ prompt: String) -> String? {
-    if let data = prompt.data(using: .utf8) {
-      FileHandle.standardError.write(data)
-    }
-    guard let line = readLine() else {
-      logger.warning("Unable to read response; aborting interaction.")
-      return nil
-    }
-    return line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
   }
 
   /// Captures multiline user context for regeneration until a blank line or EOF.
@@ -370,7 +375,9 @@ struct CommitGenTool {
     }
 
     try await gitClient.commit(message: draft.commitMessage)
-    logger.notice("Git commit created successfully.")
+    noora.success(.alert("Commit created successfully", takeaways: [
+      "Subject: \(draft.subject)"
+    ]))
   }
 
   /// Emits a human-readable summary of the staged files before prompt generation.
@@ -562,8 +569,14 @@ extension CommitGenTool {
     let promptPackage = promptBuilder.makePrompt(summary: summary, metadata: metadata)
     logPromptDiagnostics(promptPackage.diagnostics)
 
-    logger.info("Requesting commit draft from the on-device language model…")
-    let generation = try await llmClient.generateCommitDraft(from: promptPackage)
+    let generation = try await noora.progressStep(
+      message: "Generating commit message…",
+      successMessage: "Commit message generated",
+      errorMessage: "Generation failed",
+      showSpinner: true
+    ) { _ in
+      try await llmClient.generateCommitDraft(from: promptPackage)
+    }
     logPromptDiagnostics(generation.diagnostics)
 
     return GenerationOutcome(
@@ -662,7 +675,14 @@ extension CommitGenTool {
 
       logPromptDiagnostics(batchPackage.diagnostics)
 
-      let generation = try await llmClient.generateCommitDraft(from: batchPackage)
+      let generation = try await noora.progressStep(
+        message: "Processing batch \(batchNumber)/\(batches.count)…",
+        successMessage: "Batch \(batchNumber) complete",
+        errorMessage: "Batch \(batchNumber) failed",
+        showSpinner: true
+      ) { _ in
+        try await llmClient.generateCommitDraft(from: batchPackage)
+      }
       logPromptDiagnostics(generation.diagnostics)
       logger.debug("Batch \(batchNumber) partial subject: \(generation.draft.subject)")
 
@@ -707,8 +727,14 @@ extension CommitGenTool {
     )
     logPromptDiagnostics(combinationPrompt.diagnostics)
 
-    logger.info("Combining \(partialDrafts.count) partial draft(s) into a unified commit message…")
-    let combinationGeneration = try await llmClient.generateCommitDraft(from: combinationPrompt)
+    let combinationGeneration = try await noora.progressStep(
+      message: "Combining \(partialDrafts.count) partial drafts…",
+      successMessage: "Commit message generated",
+      errorMessage: "Combination failed",
+      showSpinner: true
+    ) { _ in
+      try await llmClient.generateCommitDraft(from: combinationPrompt)
+    }
     logPromptDiagnostics(combinationGeneration.diagnostics)
 
     return GenerationOutcome(
