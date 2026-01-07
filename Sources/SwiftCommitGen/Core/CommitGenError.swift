@@ -4,6 +4,7 @@ import Foundation
 enum CommitGenError: Error {
   case gitRepositoryUnavailable
   case gitCommandFailed(message: String)
+  case gitCommandTimedOut(command: String, timeout: TimeInterval)
   case cleanWorkingTree
   case modelUnavailable(reason: String)
   case modelTimedOut(timeout: TimeInterval)
@@ -18,6 +19,8 @@ extension CommitGenError: LocalizedError {
       "Failed to locate a Git repository in the current directory hierarchy."
     case .gitCommandFailed(let message):
       message.isEmpty ? "Git command failed for an unknown reason." : message
+    case .gitCommandTimedOut(let command, let timeout):
+      "Git command '\(command)' did not complete within \(formatSeconds(timeout))."
     case .cleanWorkingTree:
       "No pending changes detected; nothing to summarize."
     case .modelUnavailable(let reason):
